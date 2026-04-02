@@ -1,0 +1,790 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Wisconsin State Parks</title>
+    <style>
+      li {
+        cursor: pointer;
+      }
+      #detail-view {
+        display: none;
+      }
+
+      /* Highlight animation */
+      @keyframes achievement-pop {
+        0% {
+          background-color: #fff3a0;
+          transform: scale(1.05);
+        }
+        100% {
+          background-color: transparent;
+          transform: scale(1);
+        }
+      }
+
+      .achievement-new {
+        animation: achievement-pop 1s ease;
+        border-radius: 4px;
+        padding: 4px;
+      }
+
+      #progress-bar-container {
+        width: 100%;
+        height: 12px;
+        background: #ddd;
+        border-radius: 6px;
+        overflow: hidden;
+      }
+
+      #progress-bar {
+        height: 100%;
+        width: 0%;
+        background: #4caf50;
+        transition:
+          width 0.3s ease,
+          background-color 0.3s ease;
+      }
+
+      #visit-action {
+        margin-top: 10px;
+      }
+
+      #visit-history {
+        margin: 10px 0;
+      }
+
+      #dashboard-view {
+        margin: 20px 0;
+      }
+
+      .recent-visit {
+        padding: 6px 0;
+        border-bottom: 1px solid #eee;
+      }
+
+      #nav {
+        margin: 10px 0 20px;
+      }
+
+      #nav button {
+        margin-right: 10px;
+        padding: 6px 10px;
+        cursor: pointer;
+      }
+
+      .recent-visit:hover {
+        background-color: #f5f5f5;
+      }
+
+      .loading {
+        color: #666;
+        font-style: italic;
+      }
+
+      .empty-state {
+        color: #666;
+        text-align: center;
+        padding: 10px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Wisconsin State Parks</h1>
+
+    <div id="nav">
+      <button id="nav-dashboard">Dashboard</button>
+      <button id="nav-parks">Parks</button>
+    </div>
+
+    <p id="visit-counter">You’ve visited 0 parks</p>
+
+    <div id="filter-container">
+      <label>
+        <input type="checkbox" id="filter-unvisited" />
+        Show unvisited only
+      </label>
+    </div>
+
+    <!-- LIST VIEW -->
+    <div id="list-view">
+      <ul id="parks-list"></ul>
+    </div>
+
+    <!-- DETAIL VIEW -->
+    <div id="detail-view">
+      <button id="back-button">← Back</button>
+      <h2 id="park-name"></h2>
+      <p id="park-location"></p>
+      <p id="park-county"></p>
+      <p id="park-description"></p>
+
+      <hr />
+
+      <div id="visit-action">
+        <label for="visit-date">Select visit date:</label>
+        <input type="date" id="visit-date" />
+        <button id="visit-button">Mark as Visited</button>
+      </div>
+
+      <h3>Your Visits</h3>
+      <div id="visit-history"></div>
+    </div>
+
+    <div id="dashboard-view">
+      <h2>Recent Visits</h2>
+      <div id="recent-visits"></div>
+    </div>
+
+    <div id="next-achievement">
+      <h3>Next Achievement</h3>
+      <p id="next-achievement-title"></p>
+      <div id="progress-bar-container">
+        <div id="progress-bar"></div>
+      </div>
+      <p id="progress-text"></p>
+    </div>
+
+    <div id="achievements-panel">
+      <h3>Achievements</h3>
+      <ul id="achievements-list"></ul>
+    </div>
+
+    <script src="env.js"></script>
+    <script src="app.js"></script>
+
+    <script>
+      // ======================
+      // CONFIG
+      // ======================
+      async function ensureUserExists() {
+        await fetch(`${SUPABASE_URL}/rest/v1/users`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            Prefer: "resolution=ignore-duplicates",
+          },
+          body: JSON.stringify({
+            id: USER_ID,
+          }),
+        });
+      }
+
+      const USER_ID_KEY = "wi_state_parks_user_id";
+
+      function getUserId() {
+        let id = localStorage.getItem(USER_ID_KEY);
+
+        if (!id) {
+          id = crypto.randomUUID();
+          localStorage.setItem(USER_ID_KEY, id);
+        }
+
+        return id;
+      }
+
+      const SUPABASE_URL = window.ENV.SUPABASE_URL;
+      const SUPABASE_ANON_KEY = window.ENV.SUPABASE_ANON_KEY;
+      const USER_ID = getUserId();
+
+      // ======================
+      // STATE
+      // ======================
+      const state = {
+        parks: [],
+        visits: [],
+        achievements: [],
+        userAchievements: [],
+        currentPark: null,
+        currentView: "dashboard",
+      };
+
+      // ======================
+      // DOM CACHE (assigned in loadApp)
+      // ======================
+      let DOM = {};
+
+      // ======================
+      // DATA FUNCTIONS
+      // ======================
+      async function fetchParks() {
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/parks?select=*&order=park_name`,
+          {
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            },
+          },
+        );
+
+        return await res.json();
+      }
+
+      async function fetchVisits() {
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/visits?user_id=eq.${USER_ID}&select=*`,
+          {
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            },
+          },
+        );
+        return await res.json();
+      }
+
+      async function fetchVisitedStatus(parkId) {
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/visits?user_id=eq.${USER_ID}&park_id=eq.${parkId}&select=id`,
+          {
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            },
+          },
+        );
+        const data = await res.json();
+        return data.length > 0;
+      }
+
+      async function fetchAchievements() {
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/achievements?select=*`,
+          {
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            },
+          },
+        );
+        return await res.json();
+      }
+
+      async function fetchUserAchievements() {
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/user_achievements?user_id=eq.${USER_ID}&select=*`,
+          {
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            },
+          },
+        );
+        return await res.json();
+      }
+
+      async function saveVisit(parkId, visitDate) {
+        return await fetch(`${SUPABASE_URL}/rest/v1/visits`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            Prefer: "return=representation",
+          },
+          body: JSON.stringify({
+            user_id: USER_ID,
+            park_id: parkId,
+            visit_date: visitDate,
+          }),
+        });
+      }
+
+      async function deleteVisit(parkId) {
+        return await fetch(
+          `${SUPABASE_URL}/rest/v1/visits?user_id=eq.${USER_ID}&park_id=eq.${parkId}`,
+          {
+            method: "DELETE",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            },
+          },
+        );
+      }
+
+      async function unlockAchievement(achievement) {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/user_achievements`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({
+            user_id: USER_ID,
+            achievement_id: achievement.id,
+            unlocked_at: new Date().toISOString(),
+          }),
+        });
+        if (!res.ok) {
+          console.error(await res.text());
+          return;
+        }
+        state.userAchievements.push({
+          achievement_id: achievement.id,
+          unlocked_at: new Date().toISOString(),
+        });
+
+        // re-render and highlight the new one
+        renderAchievements(achievement.id);
+      }
+
+      async function checkAchievements() {
+        console.log("Checking achievements...");
+        const visitCount = state.visits.length;
+
+        const unlockedIds = new Set(
+          state.userAchievements.map((a) => a.achievement_id),
+        );
+
+        let unlockedSomething = false;
+
+        for (const achievement of state.achievements) {
+          const qualifies = visitCount >= Number(achievement.threshold);
+          const alreadyUnlocked = unlockedIds.has(achievement.id);
+
+          if (qualifies && !alreadyUnlocked) {
+            await unlockAchievement(achievement);
+            unlockedSomething = true;
+          }
+        }
+
+        // only re-render if NOTHING unlocked
+        if (!unlockedSomething) {
+          renderAchievements();
+        }
+      }
+
+      // ======================
+      // HELPERS
+      // ======================
+      function formatDate(dateString) {
+        const [year, month, day] = dateString.split("-");
+
+        const date = new Date(year, month - 1, day); // local time, no shift
+
+        return date.toLocaleDateString(undefined, {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        });
+      }
+
+      function sortVisitsByDate(visits) {
+        return [...visits].sort(
+          (a, b) => new Date(b.visit_date) - new Date(a.visit_date),
+        );
+      }
+
+      function setLoading(element, message) {
+        element.innerHTML = `<p class="loading">${message}</p>`;
+      }
+
+      // ======================
+      // RENDER FUNCTIONS
+      // ======================
+      function renderApp() {
+        renderVisitCounter(state.visits.length);
+        renderNextAchievement();
+        renderAchievements();
+
+        if (state.currentView === "dashboard") {
+          renderRecentVisits();
+        }
+
+        if (state.currentView === "parks") {
+          renderParkList(getFilteredParks());
+        }
+
+        if (state.currentView === "detail" && state.currentPark) {
+          const visited = state.visits.some(
+            (v) => v.park_id === state.currentPark.id,
+          );
+          renderParkDetail(state.currentPark, visited);
+        }
+      }
+
+      function renderParkList(parks) {
+        DOM.parksList.innerHTML = "";
+
+        if (parks.length === 0) {
+          DOM.parksList.innerHTML = `
+    <div class="empty-state">
+      <p>You’ve visited them all 🎉</p>
+      <p>Time to revisit your favorites or plan a new trip.</p>
+    </div>
+  `;
+          return;
+        }
+        parks.forEach((park) => {
+          const li = document.createElement("li");
+          li.textContent = park.park_name;
+
+          // show check mark if visited
+          const visited = state.visits.some((v) => v.park_id === park.id);
+          if (visited) li.textContent += " ✓";
+
+          li.style.cursor = "pointer";
+          li.addEventListener("click", () => showParkDetail(park));
+          DOM.parksList.appendChild(li);
+        });
+      }
+
+      function renderParkDetail(park, visited) {
+        const today = new Date().toISOString().split("T")[0];
+        DOM.visitDateInput.value = today;
+        DOM.parkName.textContent = park.park_name;
+        DOM.parkLocation.textContent = park.nearest_city;
+        DOM.parkCounty.textContent = park.county;
+        DOM.parkDescription.textContent = park.description;
+
+        DOM.visitButton.textContent = visited
+          ? "Remove Visit"
+          : "Mark as Visited";
+
+        DOM.visitButton.disabled = false;
+
+        const visitsForPark = sortVisitsByDate(
+          state.visits.filter((v) => v.park_id === park.id),
+        );
+
+        if (visitsForPark.length === 0) {
+          DOM.visitHistory.innerHTML = `
+    <div class="empty-state">
+      <p>You haven’t logged a visit here yet.</p>
+      <p>When you do, it’ll show up here.</p>
+    </div>
+  `;
+        } else {
+          DOM.visitHistory.innerHTML = visitsForPark
+            .map((v) => `<div>• ${formatDate(v.visit_date)}</div>`)
+            .join("");
+        }
+      }
+
+      function renderVisitCounter(count) {
+        const total = state.parks.length;
+        const remaining = total - count;
+
+        DOM.visitCounter.textContent = `You've visited ${count} parks • ${remaining} left`;
+      }
+
+      function showDashboardView() {
+        state.currentView = "dashboard";
+
+        DOM.dashboardView.style.display = "block";
+        DOM.listView.style.display = "none";
+        DOM.detailView.style.display = "none";
+        DOM.filterContainer.style.display = "none";
+
+        renderApp();
+      }
+
+      function showParksView() {
+        state.currentView = "parks";
+
+        DOM.dashboardView.style.display = "none";
+        DOM.listView.style.display = "block";
+        DOM.detailView.style.display = "none";
+        DOM.filterContainer.style.display = "block";
+
+        renderApp();
+      }
+
+      function showDetailView() {
+        state.currentView = "detail";
+
+        DOM.listView.style.display = "none";
+        DOM.detailView.style.display = "block";
+        DOM.filterContainer.style.display = "none";
+
+        renderApp();
+      }
+
+      function showListView() {
+        if (state.currentView === "dashboard") {
+          showDashboardView();
+        } else {
+          showParksView();
+        }
+      }
+      function renderAchievements(newlyUnlockedId = null) {
+        DOM.achievementsList.innerHTML = "";
+
+        if (state.userAchievements.length === 0) {
+          DOM.achievementsList.innerHTML = `
+    <div class="empty-state">
+      <p>No achievements unlocked yet.</p>
+      <p>Keep exploring to earn your first one 🏆</p>
+    </div>
+  `;
+          return;
+        }
+
+        const visitCount = state.visits.length;
+
+        for (const achievement of state.achievements) {
+          const unlocked = state.userAchievements.some(
+            (ua) => ua.achievement_id === achievement.id,
+          );
+
+          const li = document.createElement("li");
+
+          if (unlocked) {
+            li.textContent = `🏆 ${achievement.title}`;
+          } else {
+            li.textContent = `🔒 ${achievement.title} (${visitCount}/${achievement.threshold})`;
+            li.style.opacity = "0.5";
+          }
+
+          // highlight newly unlocked
+          if (newlyUnlockedId && achievement.id === newlyUnlockedId) {
+            li.classList.add("achievement-new");
+          }
+
+          DOM.achievementsList.appendChild(li);
+        }
+      }
+
+      function renderNextAchievement() {
+        const visitCount = state.visits.length;
+
+        // find next locked achievement
+        const next = state.achievements
+          .filter(
+            (a) =>
+              !state.userAchievements.some((ua) => ua.achievement_id === a.id),
+          )
+          .sort((a, b) => a.threshold - b.threshold)[0];
+
+        // all achievements unlocked
+        if (!next) {
+          DOM.nextAchievementTitle.textContent =
+            "You’ve unlocked every achievement 🎉";
+
+          DOM.progressBar.style.width = "100%";
+          DOM.progressBar.style.backgroundColor = "#16a34a";
+
+          DOM.progressText.textContent = "That’s some serious exploring!";
+
+          return;
+        }
+
+        DOM.nextAchievementTitle.textContent = next.title;
+
+        // calculate percent
+        const percent = Math.min((visitCount / next.threshold) * 100, 100);
+
+        // COLOR LOGIC
+        let color = "#dc2626"; // red
+
+        if (percent >= 75) {
+          color = "#16a34a"; // green
+        } else if (percent >= 40) {
+          color = "#eab308"; // yellow
+        }
+
+        // apply width + color
+        DOM.progressBar.style.width = percent + "%";
+        DOM.progressBar.style.backgroundColor = color;
+
+        // progress text
+        DOM.progressText.textContent = `${visitCount} / ${next.threshold}`;
+      }
+
+      function renderRecentVisits() {
+        const visits = sortVisitsByDate(state.visits);
+
+        DOM.recentVisits.innerHTML = "";
+
+        if (visits.length === 0) {
+          DOM.recentVisits.innerHTML = `
+    <div class="empty-state">
+      <p>No visits yet.</p>
+      <p>Start exploring your first park 🌲</p>
+    </div>
+  `;
+          return;
+        }
+
+        const recent = visits.slice(0, 5);
+
+        recent.forEach((visit) => {
+          const park = state.parks.find((p) => p.id === visit.park_id);
+
+          const div = document.createElement("div");
+          div.className = "recent-visit";
+          div.style.cursor = "pointer";
+
+          div.innerHTML = `
+      <strong>${park.park_name}</strong><br>
+      ${formatDate(visit.visit_date)}
+    `;
+
+          div.addEventListener("click", () => {
+            showParkDetail(park);
+          });
+
+          DOM.recentVisits.appendChild(div);
+        });
+      }
+
+      // ======================
+      // CONTROLLER FUNCTIONS
+      // ======================
+      async function showParkDetail(park) {
+        state.currentPark = park;
+
+        // Force "coming from parks"
+        state.currentView = "parks";
+
+        showDetailView();
+
+        const visited = state.visits.some((v) => v.park_id === park.id);
+        renderParkDetail(park, visited);
+      }
+
+      function getFilteredParks() {
+        if (!DOM.filterUnvisited.checked) {
+          return state.parks;
+        }
+
+        return state.parks.filter(
+          (park) => !state.visits.some((v) => v.park_id === park.id),
+        );
+      }
+
+      async function handleVisitClick() {
+        if (!state.currentPark) return;
+
+        const parkId = state.currentPark.id;
+        const alreadyVisited = state.visits.some((v) => v.park_id === parkId);
+
+        let response;
+
+        if (alreadyVisited) {
+          // REMOVE visit
+          response = await deleteVisit(parkId);
+
+          if (response.ok) {
+            state.visits = state.visits.filter((v) => v.park_id !== parkId);
+          }
+        } else {
+          // ADD visit
+          const visitDate =
+            DOM.visitDateInput.value || new Date().toISOString().split("T")[0];
+
+          response = await saveVisit(parkId, visitDate);
+
+          if (response.ok) {
+            state.visits.push({
+              park_id: parkId,
+              visit_date: visitDate,
+            });
+          }
+        }
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Supabase error:", errorText);
+          alert(errorText); // 👈 THIS is key
+          return;
+        }
+
+        // update UI
+        const visited = state.visits.some((v) => v.park_id === parkId);
+        await checkAchievements();
+        renderApp();
+      }
+
+      async function loadApp() {
+        console.log("App loading...");
+
+        await ensureUserExists();
+
+        // ======================
+        // CACHE DOM
+        // ======================
+        DOM = {
+          navDashboard: document.getElementById("nav-dashboard"),
+          navParks: document.getElementById("nav-parks"),
+          dashboardView: document.getElementById("dashboard-view"),
+          parksList: document.getElementById("parks-list"),
+          parkName: document.getElementById("park-name"),
+          parkLocation: document.getElementById("park-location"),
+          parkCounty: document.getElementById("park-county"),
+          parkDescription: document.getElementById("park-description"),
+          visitButton: document.getElementById("visit-button"),
+          visitCounter: document.getElementById("visit-counter"),
+          listView: document.getElementById("list-view"),
+          detailView: document.getElementById("detail-view"),
+          backButton: document.getElementById("back-button"),
+          achievementsPanel: document.getElementById("achievements-panel"),
+          achievementsList: document.getElementById("achievements-list"),
+          nextAchievementTitle: document.getElementById(
+            "next-achievement-title",
+          ),
+          visitDateInput: document.getElementById("visit-date"),
+          progressBar: document.getElementById("progress-bar"),
+          progressText: document.getElementById("progress-text"),
+          filterUnvisited: document.getElementById("filter-unvisited"),
+          filterContainer: document.getElementById("filter-container"),
+          visitHistory: document.getElementById("visit-history"),
+          recentVisits: document.getElementById("recent-visits"),
+        };
+
+        setLoading(DOM.parksList, "Loading parks...");
+        setLoading(DOM.recentVisits, "Loading recent visits...");
+
+        // ======================
+        // FETCH DATA
+        // ======================
+        state.parks = await fetchParks();
+        state.visits = await fetchVisits();
+        state.achievements = await fetchAchievements();
+        state.userAchievements = await fetchUserAchievements();
+
+        // 🔥 IMPORTANT: sync achievements with visits
+        await checkAchievements();
+
+        renderNextAchievement();
+
+        console.log("Data loaded:", state);
+
+        // ======================
+        // INITIAL RENDER
+        // ======================
+        renderParkList(getFilteredParks());
+        renderVisitCounter(state.visits.length);
+        renderRecentVisits();
+
+        // ======================
+        // EVENT LISTENERS
+        // ======================
+        DOM.navDashboard.addEventListener("click", showDashboardView);
+        DOM.navParks.addEventListener("click", showParksView);
+        DOM.visitButton.addEventListener("click", handleVisitClick);
+        DOM.backButton.addEventListener("click", showListView);
+        DOM.filterUnvisited.addEventListener("change", () => {
+          renderParkList(getFilteredParks());
+        });
+
+        // ======================
+        // SET DEFAULT VIEW
+        // ======================
+        showDashboardView();
+      }
+
+      // ======================
+      // INIT
+      // ======================
+      document.addEventListener("DOMContentLoaded", () => {
+        loadApp();
+      });
+    </script>
+  </body>
+</html>
