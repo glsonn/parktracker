@@ -335,13 +335,17 @@
 
       async function checkAchievements() {
         console.log("Checking achievements...");
-        const visitCount = state.visits.length;
+        const visitCount = new Set(state.visits.map((v) => v.park_id)).size;
 
         const unlockedIds = new Set(
           state.userAchievements.map((a) => a.achievement_id),
         );
 
         let unlockedSomething = false;
+
+        console.log("visitCount:", visitCount);
+        console.log("achievements:", state.achievements);
+        console.log("userAchievements:", state.userAchievements);
 
         for (const achievement of state.achievements) {
           const qualifies = visitCount >= Number(achievement.threshold);
@@ -413,11 +417,11 @@
 
         if (parks.length === 0) {
           DOM.parksList.innerHTML = `
-    <div class="empty-state">
-      <p>You’ve visited them all 🎉</p>
-      <p>Time to revisit your favorites or plan a new trip.</p>
-    </div>
-  `;
+          <div class="empty-state">
+            <p>You’ve visited them all 🎉</p>
+            <p>Time to revisit your favorites or plan a new trip.</p>
+          </div>
+        `;
           return;
         }
         parks.forEach((park) => {
@@ -454,11 +458,11 @@
 
         if (visitsForPark.length === 0) {
           DOM.visitHistory.innerHTML = `
-    <div class="empty-state">
-      <p>You haven’t logged a visit here yet.</p>
-      <p>When you do, it’ll show up here.</p>
-    </div>
-  `;
+          <div class="empty-state">
+            <p>You haven’t logged a visit here yet.</p>
+            <p>When you do, it’ll show up here.</p>
+          </div>
+        `;
         } else {
           DOM.visitHistory.innerHTML = visitsForPark
             .map((v) => `<div>• ${formatDate(v.visit_date)}</div>`)
@@ -517,15 +521,15 @@
 
         if (state.userAchievements.length === 0) {
           DOM.achievementsList.innerHTML = `
-    <div class="empty-state">
-      <p>No achievements unlocked yet.</p>
-      <p>Keep exploring to earn your first one 🏆</p>
-    </div>
-  `;
+          <div class="empty-state">
+            <p>No achievements unlocked yet.</p>
+            <p>Keep exploring to earn your first one 🏆</p>
+          </div>
+        `;
           return;
         }
 
-        const visitCount = state.visits.length;
+        const visitCount = new Set(state.visits.map((v) => v.park_id)).size;
 
         for (const achievement of state.achievements) {
           const unlocked = state.userAchievements.some(
@@ -551,7 +555,7 @@
       }
 
       function renderNextAchievement() {
-        const visitCount = state.visits.length;
+        const visitCount = new Set(state.visits.map((v) => v.park_id)).size;
 
         // find next locked achievement
         const next = state.achievements
@@ -603,11 +607,11 @@
 
         if (visits.length === 0) {
           DOM.recentVisits.innerHTML = `
-    <div class="empty-state">
-      <p>No visits yet.</p>
-      <p>Start exploring your first park 🌲</p>
-    </div>
-  `;
+          <div class="empty-state">
+            <p>No visits yet.</p>
+            <p>Start exploring your first park 🌲</p>
+          </div>
+        `;
           return;
         }
 
@@ -621,9 +625,9 @@
           div.style.cursor = "pointer";
 
           div.innerHTML = `
-      <strong>${park.park_name}</strong><br>
-      ${formatDate(visit.visit_date)}
-    `;
+            <strong>${park.park_name}</strong><br>
+            ${formatDate(visit.visit_date)}
+          `;
 
           div.addEventListener("click", () => {
             showParkDetail(park);
@@ -667,36 +671,24 @@
         let response;
 
         if (alreadyVisited) {
-          // REMOVE visit
           response = await deleteVisit(parkId);
-
-          if (response.ok) {
-            state.visits = state.visits.filter((v) => v.park_id !== parkId);
-          }
         } else {
-          // ADD visit
           const visitDate =
             DOM.visitDateInput.value || new Date().toISOString().split("T")[0];
 
           response = await saveVisit(parkId, visitDate);
-
-          if (response.ok) {
-            state.visits.push({
-              park_id: parkId,
-              visit_date: visitDate,
-            });
-          }
         }
 
         if (!response.ok) {
           const errorText = await response.text();
           console.error("Supabase error:", errorText);
-          alert(errorText); // 👈 THIS is key
+          alert(errorText);
           return;
         }
 
-        // update UI
-        const visited = state.visits.some((v) => v.park_id === parkId);
+        // ✅ THE FIX
+        state.visits = await fetchVisits();
+
         await checkAchievements();
         renderApp();
       }
