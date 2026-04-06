@@ -2,8 +2,20 @@
 <html>
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Wisconsin State Parks</title>
     <style>
+      html {
+        font-size: 16px;
+      }
+
+      body {
+        font-family: Arial, sans-serif;
+        font-size: 1rem;
+        margin: 0;
+        padding: 10px;
+      }
+
       li {
         cursor: pointer;
       }
@@ -69,7 +81,8 @@
 
       #nav button {
         margin-right: 10px;
-        padding: 6px 10px;
+        padding: 10px 14px;
+        font-size: 1rem;
         cursor: pointer;
       }
 
@@ -86,6 +99,30 @@
         color: #666;
         text-align: center;
         padding: 10px 0;
+      }
+
+      @media (max-width: 600px) {
+        body {
+          font-size: 1.1rem;
+          padding: 12px;
+        }
+
+        h1 {
+          font-size: 1.6rem;
+        }
+
+        h2 {
+          font-size: 1.3rem;
+        }
+
+        li {
+          padding: 8px 0;
+        }
+
+        button {
+          font-size: 1.1rem;
+          padding: 12px 16px;
+        }
       }
     </style>
   </head>
