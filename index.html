@@ -58,6 +58,22 @@
           background-color 0.3s ease;
       }
 
+      #total-progress-container {
+        width: 100%;
+        height: 12px;
+        background: #ddd;
+        border-radius: 6px;
+        overflow: hidden;
+        margin-bottom: 6px;
+      }
+
+      #total-progress-bar {
+        background: #4caf50;
+        height: 100%;
+        width: 0%;
+        transition: width 0.3s ease;
+      }
+
       #visit-action {
         margin-top: 10px;
       }
@@ -179,6 +195,13 @@
       <h2>Recent Visits</h2>
       <div id="recent-visits"></div>
     </div>
+
+    <h3>Your Progress</h3>
+
+    <div id="total-progress-container">
+      <div id="total-progress-bar"></div>
+    </div>
+    <p id="total-progress-text"></p>
 
     <div id="next-achievement">
       <h3>Next Achievement</h3>
@@ -681,6 +704,19 @@
         });
       }
 
+      function updateTotalProgress() {
+        const totalParks = state.parks.length;
+
+        if (totalParks === 0) return;
+
+        const visitedCount = new Set(state.visits.map((v) => v.park_id)).size;
+
+        const percent = Math.round((visitedCount / totalParks) * 100);
+
+        DOM.totalProgressBar.style.width = percent + "%";
+        DOM.totalProgressText.textContent = `${visitedCount} of ${totalParks} parks visited (${percent}%)`;
+      }
+
       // ======================
       // CONTROLLER FUNCTIONS
       // ======================
@@ -730,11 +766,11 @@
           return;
         }
 
-        // ✅ THE FIX
         state.visits = await fetchVisits();
 
         await checkAchievements();
         renderApp();
+        updateTotalProgress();
       }
 
       async function loadApp() {
@@ -771,6 +807,8 @@
           filterContainer: document.getElementById("filter-container"),
           visitHistory: document.getElementById("visit-history"),
           recentVisits: document.getElementById("recent-visits"),
+          totalProgressBar: document.getElementById("total-progress-bar"),
+          totalProgressText: document.getElementById("total-progress-text"),
         };
 
         setLoading(DOM.parksList, "Loading parks...");
@@ -797,6 +835,7 @@
         renderParkList(getFilteredParks());
         renderVisitCounter(state.visits.length);
         renderRecentVisits();
+        updateTotalProgress();
 
         // ======================
         // EVENT LISTENERS
