@@ -460,7 +460,7 @@
       }
 
       async function checkAchievements() {
-        console.log("Checking achievements...");
+        // console.log("Checking achievements...");
         const visitCount = new Set(state.visits.map((v) => v.park_id)).size;
 
         const unlockedIds = new Set(
@@ -469,9 +469,9 @@
 
         let unlockedSomething = false;
 
-        console.log("visitCount:", visitCount);
-        console.log("achievements:", state.achievements);
-        console.log("userAchievements:", state.userAchievements);
+        // console.log("visitCount:", visitCount);
+        // console.log("achievements:", state.achievements);
+        // console.log("userAchievements:", state.userAchievements);
 
         for (const achievement of state.achievements) {
           const qualifies = visitCount >= Number(achievement.threshold);
@@ -833,7 +833,7 @@
       }
 
       async function loadApp() {
-        console.log("App loading...");
+        // console.log("App loading...");
 
         await ensureUserExists();
 
@@ -886,7 +886,7 @@
 
         renderNextAchievement();
 
-        console.log("Data loaded:", state);
+        // console.log("Data loaded:", state);
 
         // ======================
         // INITIAL RENDER
