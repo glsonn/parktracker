@@ -147,74 +147,133 @@
         margin: 4px 0;
         color: #444;
       }
+
+      body {
+        font-family: Arial, sans-serif;
+        font-size: 1rem;
+        margin: 0;
+        padding: 10px;
+        background-color: #f9fafb;
+      }
+
+      .app-container {
+        max-width: 700px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        margin-bottom: 10px;
+      }
+
+      h2,
+      h3 {
+        margin-top: 24px;
+        margin-bottom: 10px;
+      }
+
+      #dashboard-view,
+      #next-achievement,
+      #achievements-panel,
+      #detail-view {
+        margin-top: 24px;
+      }
+
+      p {
+        margin: 6px 0 12px;
+      }
+
+      .progress-section {
+        margin-top: 24px;
+      }
+
+      #total-progress-text,
+      #progress-text {
+        font-size: 0.9rem;
+        color: #555;
+      }
+
+      button {
+        background-color: #2f855a;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        padding: 10px 14px;
+        margin-top: 8px;
+      }
+
+      button:hover {
+        background-color: #276749;
+      }
     </style>
   </head>
   <body>
-    <h1>Wisconsin State Parks</h1>
+    <div class="app-container">
+      <h1>Wisconsin State Parks</h1>
 
-    <div id="nav">
-      <button id="nav-dashboard">Dashboard</button>
-      <button id="nav-parks">Parks</button>
-    </div>
-
-    <p id="visit-counter">You’ve visited 0 parks</p>
-
-    <div id="filter-container">
-      <label>
-        <input type="checkbox" id="filter-unvisited" />
-        Show unvisited only
-      </label>
-    </div>
-
-    <!-- LIST VIEW -->
-    <div id="list-view">
-      <ul id="parks-list"></ul>
-    </div>
-
-    <!-- DETAIL VIEW -->
-    <div id="detail-view">
-      <button id="back-button">← Back</button>
-      <h2 id="park-name"></h2>
-      <p id="park-location"></p>
-      <p id="park-county"></p>
-      <p id="park-description"></p>
-
-      <hr />
-
-      <div id="visit-action">
-        <label for="visit-date">Select visit date:</label>
-        <input type="date" id="visit-date" />
-        <button id="visit-button">Mark as Visited</button>
+      <div id="nav">
+        <button id="nav-dashboard">Dashboard</button>
+        <button id="nav-parks">Parks</button>
       </div>
 
-      <h3>Your Visits</h3>
-      <div id="visit-history"></div>
-    </div>
+      <p id="visit-counter">You’ve visited 0 parks</p>
 
-    <div id="dashboard-view">
-      <h2>Recent Visits</h2>
-      <div id="recent-visits"></div>
-    </div>
-
-    <h3>Your Progress</h3>
-
-    <div id="total-progress-container">
-      <div id="total-progress-bar"></div>
-    </div>
-    <p id="total-progress-text"></p>
-
-    <div id="next-achievement">
-      <h3>Next Achievement</h3>
-      <p id="next-achievement-title"></p>
-      <div id="progress-bar-container">
-        <div id="progress-bar"></div>
+      <div id="filter-container">
+        <label>
+          <input type="checkbox" id="filter-unvisited" />
+          Show unvisited only
+        </label>
       </div>
-      <p id="progress-text"></p>
-    </div>
 
-    <div id="achievements-panel">
-      <h3>Achievements</h3>
-      <ul id="achievements-list"></ul>
+      <!-- LIST VIEW -->
+      <div id="list-view">
+        <ul id="parks-list"></ul>
+      </div>
+
+      <!-- DETAIL VIEW -->
+      <div id="detail-view">
+        <button id="back-button">← Back</button>
+        <h2 id="park-name"></h2>
+        <p id="park-location"></p>
+        <p id="park-county"></p>
+        <p id="park-description"></p>
+
+        <hr />
+
+        <div id="visit-action">
+          <label for="visit-date">Select visit date:</label>
+          <input type="date" id="visit-date" />
+          <button id="visit-button">Mark as Visited</button>
+        </div>
+
+        <h3>Your Visits</h3>
+        <div id="visit-history"></div>
+      </div>
+
+      <div id="dashboard-view">
+        <h2>Recent Visits</h2>
+        <div id="recent-visits"></div>
+      </div>
+
+      <h3>Your Progress</h3>
+
+      <div id="total-progress-container">
+        <div id="total-progress-bar"></div>
+      </div>
+      <p id="total-progress-text"></p>
+
+      <div id="next-achievement">
+        <h3>Next Achievement</h3>
+        <p id="next-achievement-title"></p>
+        <div id="progress-bar-container">
+          <div id="progress-bar"></div>
+        </div>
+        <p id="progress-text"></p>
+      </div>
+
+      <div id="achievements-panel">
+        <h3>Achievements</h3>
+        <ul id="achievements-list"></ul>
+      </div>
     </div>
 
     <script src="env.js"></script>
