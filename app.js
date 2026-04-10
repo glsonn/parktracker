@@ -1,0 +1,661 @@
+/* eslint-env browser */
+
+// ======================
+// CONFIG
+// ======================
+
+// Load Supabase credentials from env.js
+const SUPABASE_URL = window.ENV?.SUPABASE_URL;
+const SUPABASE_ANON_KEY = window.ENV?.SUPABASE_ANON_KEY;
+
+// Persistent user ID
+const USER_ID_KEY = "wi_state_parks_user_id";
+
+function getUserId() {
+  let id = localStorage.getItem(USER_ID_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(USER_ID_KEY, id);
+  }
+  return id;
+}
+
+const USER_ID = getUserId();
+
+// Ensure the user exists in the database
+async function ensureUserExists() {
+  await fetch(`${SUPABASE_URL}/rest/v1/users`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      Prefer: "resolution=ignore-duplicates",
+    },
+    body: JSON.stringify({
+      id: USER_ID,
+    }),
+  });
+}
+
+// ======================
+// STATE
+// ======================
+const state = {
+  parks: [],
+  visits: [],
+  achievements: [],
+  userAchievements: [],
+  currentPark: null,
+  currentView: "dashboard",
+};
+
+// ======================
+// DOM CACHE (assigned in loadApp)
+// ======================
+let DOM = {};
+
+// ======================
+// DATA FUNCTIONS
+// ======================
+// Generic helper for Supabase REST API calls
+async function safeFetch(endpoint, options = {}, returnType = "json") {
+  try {
+    const res = await fetch(endpoint, options);
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(errorText || `Request failed with status ${res.status}`);
+    }
+
+    // Some requests (like DELETE) may return no content
+    if (returnType === "none") {
+      return true;
+    }
+
+    // Handle empty responses safely
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  } catch (error) {
+    console.error("Fetch error:", error);
+    alert("Something went wrong. Please try again.");
+    return returnType === "json" ? [] : null;
+  }
+}
+
+function getHeaders(additionalHeaders = {}) {
+  return {
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    "Content-Type": "application/json",
+    ...additionalHeaders,
+  };
+}
+
+async function fetchParks() {
+  return await safeFetch(`${SUPABASE_URL}/rest/v1/parks?select=*`, {
+    headers: getHeaders(),
+  });
+}
+
+async function fetchVisits() {
+  return await safeFetch(
+    `${SUPABASE_URL}/rest/v1/visits?user_id=eq.${USER_ID}&select=*`,
+    {
+      headers: getHeaders(),
+    },
+  );
+}
+
+async function fetchVisitedStatus(parkId) {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/visits?user_id=eq.${USER_ID}&park_id=eq.${parkId}&select=id`,
+    {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+    },
+  );
+  const data = await res.json();
+  return data.length > 0;
+}
+
+async function fetchAchievements() {
+  return await safeFetch(`${SUPABASE_URL}/rest/v1/achievements?select=*`, {
+    headers: getHeaders(),
+  });
+}
+
+async function fetchUserAchievements() {
+  return await safeFetch(
+    `${SUPABASE_URL}/rest/v1/user_achievements?user_id=eq.${USER_ID}&select=*`,
+    {
+      headers: getHeaders(),
+    },
+  );
+}
+
+async function saveVisit(parkId, visitDate, notes) {
+  return await safeFetch(`${SUPABASE_URL}/rest/v1/visits`, {
+    method: "POST",
+    headers: {
+      ...getHeaders(),
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify({
+      user_id: USER_ID,
+      park_id: parkId,
+      visit_date: visitDate,
+      notes: notes || null,
+    }),
+  });
+}
+
+async function deleteVisit(parkId) {
+  return await safeFetch(
+    `${SUPABASE_URL}/rest/v1/visits?user_id=eq.${USER_ID}&park_id=eq.${parkId}`,
+    {
+      method: "DELETE",
+      headers: getHeaders(),
+    },
+    "none", // No JSON body expected
+  );
+}
+
+async function unlockAchievement(achievement) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/user_achievements`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+    body: JSON.stringify({
+      user_id: USER_ID,
+      achievement_id: achievement.id,
+      unlocked_at: new Date().toISOString(),
+    }),
+  });
+  if (!res.ok) {
+    console.error(await res.text());
+    return;
+  }
+  state.userAchievements.push({
+    achievement_id: achievement.id,
+    unlocked_at: new Date().toISOString(),
+  });
+
+  // re-render and highlight the new one
+  renderAchievements(achievement.id);
+}
+
+async function checkAchievements() {
+  // console.log("Checking achievements...");
+  const visitCount = new Set(state.visits.map((v) => v.park_id)).size;
+
+  const unlockedIds = new Set(
+    state.userAchievements.map((a) => a.achievement_id),
+  );
+
+  let unlockedSomething = false;
+
+  // console.log("visitCount:", visitCount);
+  // console.log("achievements:", state.achievements);
+  // console.log("userAchievements:", state.userAchievements);
+
+  for (const achievement of state.achievements) {
+    const qualifies = visitCount >= Number(achievement.threshold);
+    const alreadyUnlocked = unlockedIds.has(achievement.id);
+
+    if (qualifies && !alreadyUnlocked) {
+      await unlockAchievement(achievement);
+      unlockedSomething = true;
+    }
+  }
+
+  // only re-render if NOTHING unlocked
+  if (!unlockedSomething) {
+    renderAchievements();
+  }
+}
+
+// ======================
+// HELPERS
+// ======================
+function formatDate(dateString) {
+  const [year, month, day] = dateString.split("-");
+
+  const date = new Date(year, month - 1, day); // local time, no shift
+
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+function sortVisitsByDate(visits) {
+  return [...visits].sort(
+    (a, b) => new Date(b.visit_date) - new Date(a.visit_date),
+  );
+}
+
+function setLoading(element, message) {
+  element.innerHTML = `<p class="loading">${message}</p>`;
+}
+
+// ======================
+// RENDER FUNCTIONS
+// ======================
+function renderApp() {
+  renderVisitCounter(state.visits.length);
+  renderNextAchievement();
+  renderAchievements();
+
+  if (state.currentView === "dashboard") {
+    renderRecentVisits();
+  }
+
+  if (state.currentView === "parks") {
+    renderParkList(getFilteredParks());
+  }
+
+  if (state.currentView === "detail" && state.currentPark) {
+    const visited = state.visits.some(
+      (v) => v.park_id === state.currentPark.id,
+    );
+    renderParkDetail(state.currentPark, visited);
+  }
+}
+
+function renderParkList(parks) {
+  DOM.parksList.innerHTML = "";
+
+  if (parks.length === 0) {
+    DOM.parksList.innerHTML = `
+          <div class="empty-state">
+            <p>You’ve visited them all 🎉</p>
+            <p>Time to revisit your favorites or plan a new trip.</p>
+          </div>
+        `;
+    return;
+  }
+  parks.forEach((park) => {
+    const li = document.createElement("li");
+    li.textContent = park.park_name;
+
+    // show check mark if visited
+    const visited = state.visits.some((v) => v.park_id === park.id);
+    if (visited) li.textContent += " ✓";
+
+    li.style.cursor = "pointer";
+    li.addEventListener("click", () => showParkDetail(park));
+    DOM.parksList.appendChild(li);
+  });
+}
+
+function renderParkDetail(park, visited) {
+  const today = new Date().toISOString().split("T")[0];
+  DOM.visitDateInput.value = today;
+  DOM.parkName.textContent = park.park_name;
+  DOM.parkLocation.textContent = "📍 Nearest City: " + park.nearest_city;
+  DOM.parkCounty.textContent = "🗺️ County: " + park.county;
+  DOM.parkDescription.textContent = park.description;
+
+  DOM.visitButton.textContent = visited ? "Remove Visit" : "Mark as Visited";
+
+  DOM.visitButton.disabled = false;
+
+  const visitsForPark = sortVisitsByDate(
+    state.visits.filter((v) => v.park_id === park.id),
+  );
+
+  if (visitsForPark.length === 0) {
+    DOM.visitHistory.innerHTML = `
+          <div class="empty-state">
+            <p>You haven’t logged a visit here yet.</p>
+            <p>When you do, it’ll show up here.</p>
+          </div>
+        `;
+  } else {
+    DOM.visitHistory.innerHTML = visitsForPark
+      .map(
+        (v) => `
+    <div class="visit-entry">
+      <div>• ${formatDate(v.visit_date)}</div>
+      ${v.notes ? `<div class="visit-notes">${v.notes}</div>` : ""}
+    </div>
+  `,
+      )
+      .join("");
+  }
+}
+
+function renderVisitCounter(count) {
+  const total = state.parks.length;
+  const remaining = total - count;
+
+  DOM.visitCounter.textContent = `You've visited ${count} parks • ${remaining} left`;
+}
+
+function showDashboardView() {
+  state.currentView = "dashboard";
+
+  DOM.dashboardView.style.display = "block";
+  DOM.listView.style.display = "none";
+  DOM.detailView.style.display = "none";
+  DOM.filterContainer.style.display = "none";
+
+  renderApp();
+}
+
+function showParksView() {
+  state.currentView = "parks";
+
+  DOM.dashboardView.style.display = "none";
+  DOM.listView.style.display = "block";
+  DOM.detailView.style.display = "none";
+  DOM.filterContainer.style.display = "block";
+
+  renderApp();
+}
+
+function showDetailView() {
+  state.currentView = "detail";
+
+  DOM.listView.style.display = "none";
+  DOM.detailView.style.display = "block";
+  DOM.filterContainer.style.display = "none";
+
+  renderApp();
+}
+
+function showListView() {
+  if (state.currentView === "dashboard") {
+    showDashboardView();
+  } else {
+    showParksView();
+  }
+}
+function renderAchievements(newlyUnlockedId = null) {
+  DOM.achievementsList.innerHTML = "";
+
+  if (state.userAchievements.length === 0) {
+    DOM.achievementsList.innerHTML = `
+          <div class="empty-state">
+            <p>No achievements unlocked yet.</p>
+            <p>Keep exploring to earn your first one 🏆</p>
+          </div>
+        `;
+    return;
+  }
+
+  const visitCount = new Set(state.visits.map((v) => v.park_id)).size;
+
+  for (const achievement of state.achievements) {
+    const unlocked = state.userAchievements.some(
+      (ua) => ua.achievement_id === achievement.id,
+    );
+
+    const li = document.createElement("li");
+
+    if (unlocked) {
+      li.textContent = `🏆 ${achievement.title}`;
+    } else {
+      li.textContent = `🔒 ${achievement.title} (${visitCount}/${achievement.threshold})`;
+      li.style.opacity = "0.5";
+    }
+
+    // highlight newly unlocked
+    if (newlyUnlockedId && achievement.id === newlyUnlockedId) {
+      li.classList.add("achievement-new");
+    }
+
+    DOM.achievementsList.appendChild(li);
+  }
+}
+
+function renderNextAchievement() {
+  const visitCount = new Set(state.visits.map((v) => v.park_id)).size;
+
+  // find next locked achievement
+  const next = state.achievements
+    .filter(
+      (a) => !state.userAchievements.some((ua) => ua.achievement_id === a.id),
+    )
+    .sort((a, b) => a.threshold - b.threshold)[0];
+
+  // all achievements unlocked
+  if (!next) {
+    DOM.nextAchievementTitle.textContent =
+      "You’ve unlocked every achievement 🎉";
+
+    DOM.progressBar.style.width = "100%";
+    DOM.progressBar.style.backgroundColor = "#16a34a";
+
+    DOM.progressText.textContent = "That’s some serious exploring!";
+
+    return;
+  }
+
+  DOM.nextAchievementTitle.textContent = next.title;
+
+  // calculate percent
+  const percent = Math.min((visitCount / next.threshold) * 100, 100);
+
+  // COLOR LOGIC
+  let color = "#dc2626"; // red
+
+  if (percent >= 75) {
+    color = "#16a34a"; // green
+  } else if (percent >= 40) {
+    color = "#eab308"; // yellow
+  }
+
+  // apply width + color
+  DOM.progressBar.style.width = percent + "%";
+  DOM.progressBar.style.backgroundColor = color;
+
+  // progress text
+  DOM.progressText.textContent = `${visitCount} / ${next.threshold}`;
+}
+
+function renderRecentVisits() {
+  const visits = sortVisitsByDate(state.visits);
+
+  DOM.recentVisits.innerHTML = "";
+
+  if (visits.length === 0) {
+    DOM.recentVisits.innerHTML = `
+          <div class="empty-state">
+            <p>No visits yet.</p>
+            <p>Start exploring your first park 🌲</p>
+          </div>
+        `;
+    return;
+  }
+
+  const recent = visits.slice(0, 5);
+
+  recent.forEach((visit) => {
+    const park = state.parks.find((p) => p.id === visit.park_id);
+
+    const div = document.createElement("div");
+    div.className = "recent-visit";
+    div.style.cursor = "pointer";
+
+    div.innerHTML = `
+            <strong>${park.park_name}</strong><br>
+            ${formatDate(visit.visit_date)}
+          `;
+
+    div.addEventListener("click", () => {
+      showParkDetail(park);
+    });
+
+    DOM.recentVisits.appendChild(div);
+  });
+}
+
+function updateTotalProgress() {
+  const totalParks = state.parks.length;
+
+  if (totalParks === 0) return;
+
+  const visitedCount = new Set(state.visits.map((v) => v.park_id)).size;
+
+  const percent = Math.round((visitedCount / totalParks) * 100);
+
+  DOM.totalProgressBar.style.width = percent + "%";
+  DOM.totalProgressText.textContent = `${visitedCount} of ${totalParks} parks visited (${percent}%)`;
+}
+
+// ======================
+// CONTROLLER FUNCTIONS
+// ======================
+async function showParkDetail(park) {
+  state.currentPark = park;
+
+  // Force "coming from parks"
+  state.currentView = "parks";
+
+  showDetailView();
+
+  const visited = state.visits.some((v) => v.park_id === park.id);
+  renderParkDetail(park, visited);
+}
+
+function getFilteredParks() {
+  if (!DOM.filterUnvisited.checked) {
+    return state.parks;
+  }
+
+  return state.parks.filter(
+    (park) => !state.visits.some((v) => v.park_id === park.id),
+  );
+}
+
+async function handleVisitClick() {
+  if (!state.currentPark) return;
+
+  const parkId = state.currentPark.id;
+  const alreadyVisited = state.visits.some((v) => v.park_id === parkId);
+
+  let response;
+
+  if (alreadyVisited) {
+    response = await deleteVisit(parkId);
+  } else {
+    const visitDate =
+      DOM.visitDateInput.value || new Date().toISOString().split("T")[0];
+
+    const notes = DOM.visitNotes.value.trim();
+
+    response = await saveVisit(parkId, visitDate, notes);
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Supabase error:", errorText);
+    alert(errorText);
+    return;
+  }
+
+  // Refresh state
+  state.visits = await fetchVisits();
+
+  // Clear notes after saving
+  DOM.visitNotes.value = "";
+
+  await checkAchievements();
+  renderApp();
+  updateTotalProgress();
+}
+
+async function loadApp() {
+  // console.log("App loading...");
+
+  await ensureUserExists();
+
+  // ======================
+  // CACHE DOM
+  // ======================
+  DOM = {
+    navDashboard: document.getElementById("nav-dashboard"),
+    navParks: document.getElementById("nav-parks"),
+    dashboardView: document.getElementById("dashboard-view"),
+    parksList: document.getElementById("parks-list"),
+    parkName: document.getElementById("park-name"),
+    parkLocation: document.getElementById("park-location"),
+    parkCounty: document.getElementById("park-county"),
+    parkDescription: document.getElementById("park-description"),
+    visitButton: document.getElementById("visit-button"),
+    visitCounter: document.getElementById("visit-counter"),
+    listView: document.getElementById("list-view"),
+    detailView: document.getElementById("detail-view"),
+    backButton: document.getElementById("back-button"),
+    achievementsPanel: document.getElementById("achievements-panel"),
+    achievementsList: document.getElementById("achievements-list"),
+    nextAchievementTitle: document.getElementById("next-achievement-title"),
+    visitDateInput: document.getElementById("visit-date"),
+    progressBar: document.getElementById("progress-bar"),
+    progressText: document.getElementById("progress-text"),
+    filterUnvisited: document.getElementById("filter-unvisited"),
+    filterContainer: document.getElementById("filter-container"),
+    visitHistory: document.getElementById("visit-history"),
+    recentVisits: document.getElementById("recent-visits"),
+    totalProgressBar: document.getElementById("total-progress-bar"),
+    totalProgressText: document.getElementById("total-progress-text"),
+    visitNotes: document.getElementById("visit-notes"),
+  };
+
+  setLoading(DOM.parksList, "Loading parks...");
+  setLoading(DOM.recentVisits, "Loading recent visits...");
+
+  // ======================
+  // FETCH DATA
+  // ======================
+  state.parks = await fetchParks();
+  state.visits = await fetchVisits();
+  state.achievements = await fetchAchievements();
+  state.userAchievements = await fetchUserAchievements();
+
+  // 🔥 IMPORTANT: sync achievements with visits
+  await checkAchievements();
+
+  renderNextAchievement();
+
+  // console.log("Data loaded:", state);
+
+  // ======================
+  // INITIAL RENDER
+  // ======================
+  renderParkList(getFilteredParks());
+  renderVisitCounter(state.visits.length);
+  renderRecentVisits();
+  updateTotalProgress();
+
+  // ======================
+  // EVENT LISTENERS
+  // ======================
+  DOM.navDashboard.addEventListener("click", showDashboardView);
+  DOM.navParks.addEventListener("click", showParksView);
+  DOM.visitButton.addEventListener("click", handleVisitClick);
+  DOM.backButton.addEventListener("click", showListView);
+  DOM.filterUnvisited.addEventListener("change", () => {
+    renderParkList(getFilteredParks());
+  });
+
+  // ======================
+  // SET DEFAULT VIEW
+  // ======================
+  showDashboardView();
+}
+
+// ======================
+// INIT
+// ======================
+document.addEventListener("DOMContentLoaded", () => {
+  loadApp();
+});
