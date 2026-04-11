@@ -68,18 +68,18 @@ async function safeFetch(endpoint, options = {}, returnType = "json") {
       throw new Error(errorText || `Request failed with status ${res.status}`);
     }
 
-    // Some requests (like DELETE) may return no content
+    // For operations like DELETE where no body is expected
     if (returnType === "none") {
       return true;
     }
 
-    // Handle empty responses safely
+    // Attempt to parse JSON if present
     const text = await res.text();
-    return text ? JSON.parse(text) : null;
+    return text ? JSON.parse(text) : true; // Return true if no content
   } catch (error) {
     console.error("Fetch error:", error);
     alert("Something went wrong. Please try again.");
-    return returnType === "json" ? [] : null;
+    return null; // Consistent failure indicator
   }
 }
 
@@ -99,12 +99,11 @@ async function fetchParks() {
 }
 
 async function fetchVisits() {
-  return await safeFetch(
+  const result = await safeFetch(
     `${SUPABASE_URL}/rest/v1/visits?user_id=eq.${USER_ID}&select=*`,
-    {
-      headers: getHeaders(),
-    },
+    { headers: getHeaders() },
   );
+  return result || []; // Ensure an array for rendering
 }
 
 async function fetchVisitedStatus(parkId) {
@@ -542,31 +541,29 @@ async function handleVisitClick() {
   const parkId = state.currentPark.id;
   const alreadyVisited = state.visits.some((v) => v.park_id === parkId);
 
-  let response;
+  let result;
 
   if (alreadyVisited) {
-    response = await deleteVisit(parkId);
+    result = await deleteVisit(parkId);
   } else {
     const visitDate =
       DOM.visitDateInput.value || new Date().toISOString().split("T")[0];
 
-    const notes = DOM.visitNotes.value.trim();
+    const notes = DOM.visitNotes.value.trim() || null;
 
-    response = await saveVisit(parkId, visitDate, notes);
+    result = await saveVisit(parkId, visitDate, notes);
   }
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("Supabase error:", errorText);
-    alert(errorText);
-    return;
-  }
+  // If safeFetch encountered an error, it will return null or false
+  if (!result) return;
 
   // Refresh state
   state.visits = await fetchVisits();
 
   // Clear notes after saving
-  DOM.visitNotes.value = "";
+  if (DOM.visitNotes) {
+    DOM.visitNotes.value = "";
+  }
 
   await checkAchievements();
   renderApp();
