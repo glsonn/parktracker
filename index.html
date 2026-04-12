@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Wisconsin State Parks</title>
+    <title>State Parks Passport</title>
     <style>
       html {
         font-size: 16px;
@@ -231,6 +231,29 @@
         font-style: italic;
         color: #555;
       }
+
+      .app-footer {
+        text-align: center;
+        margin-top: 40px;
+        padding: 20px;
+        font-size: 0.9rem;
+        color: #666;
+        border-top: 1px solid #e0e0e0;
+      }
+
+      .app-footer a {
+        color: #0066cc;
+        text-decoration: none;
+        margin: 0 5px;
+      }
+
+      .app-footer a:hover {
+        text-decoration: underline;
+      }
+
+      .footer-separator {
+        color: #999;
+      }
     </style>
   </head>
   <body>
@@ -313,5 +336,11 @@
 
     <script src="env.js"></script>
     <script src="app.js"></script>
+
+    <footer class="app-footer">
+      <a href="/privacy.html">Privacy Policy</a>
+      <span class="footer-separator">|</span>
+      <a href="/terms.html">Terms of Use</a>
+    </footer>
   </body>
 </html>
