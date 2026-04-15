@@ -135,7 +135,6 @@ The State Parks Passport application is deployed using **Vercel**, with source c
 ### 1. Push Code to GitHub
 Ensure your project is committed and pushed to your GitHub repository:
 
-```bash
 git add .
 git commit -m "Prepare project for deployment"
 git push origin main
