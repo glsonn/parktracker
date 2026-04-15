@@ -139,8 +139,6 @@ git add .
 git commit -m "Prepare project for deployment"
 git push origin main
 
-## 🚀 Deployment Instructions
-
 ### 2. Import the Repository into Vercel
 
 1. Log in to **https://vercel.com**.
