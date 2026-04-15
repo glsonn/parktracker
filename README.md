@@ -183,7 +183,6 @@ To connect a custom domain:
 
 To enable privacy-friendly analytics, add the following script to each HTML page just before the closing `</body>` tag:
 
-```html
 <script defer src="/_vercel/insights/script.js"></script>
 
 ## 🔐 Privacy-First Design
@@ -240,9 +239,6 @@ The State Parks Passport application is built with a focus on simplicity, scalab
 - **Privacy-First Approach** – No personal user data is collected; users are identified only by an anonymous UUID.
 - **Simplicity & Maintainability** – Avoids frameworks and overengineering to keep the codebase approachable and easy to extend.
 
-## ✅ Key Functions
-
-```markdown
 ## 🔑 Key Functions
 
 The application logic is centralized within a single `app.js` file. The following functions play a critical role in managing data and user interactions.
