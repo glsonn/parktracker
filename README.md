@@ -73,34 +73,119 @@ The application functions as a digital “passport,” enabling users to mark pa
 
 ## 🗄️ Database Schema
 
-The application relies on four primary tables:
+The application uses Supabase (PostgreSQL) to manage data. The schema is designed for simplicity while supporting future scalability to additional states.
 
-### parks
-- id (Primary Key)
-- name
-- nearest_city
-- county
-- description
-- (Planned) state for multi-state expansion
+### 1. `parks`
+Stores information about each state park.
 
-### visits
-- id (Primary Key)
-- user_id (UUID stored in localStorage)
-- park_id (Foreign Key to parks)
-- visit_date
-- notes (Optional)
+| Column | Type | Description |
+|-------|------|-------------|
+| `id` | integer (Primary Key) | Unique identifier for each park |
+| `name` | text | Name of the park |
+| `nearest_city` | text | Closest city to the park |
+| `county` | text | County where the park is located |
+| `description` | text | Detailed description of the park |
+| `state` | text (optional) | State abbreviation for multi-state expansion |
 
-### achievements
-- id (Primary Key)
-- name
-- description
-- threshold (Number of parks required)
+### 2. `visits`
+Tracks parks visited by each user.
 
-### user_achievements
-- id (Primary Key)
-- user_id
-- achievement_id (Foreign Key)
-- unlocked_at
+| Column | Type | Description |
+|-------|------|-------------|
+| `id` | integer (Primary Key) | Unique identifier for each visit |
+| `user_id` | text | Anonymous UUID stored in the user's browser |
+| `park_id` | integer (Foreign Key) | References `parks.id` |
+| `visit_date` | date | Date the park was visited |
+| `notes` | text | Optional user notes |
+
+### 3. `achievements`
+Defines milestone achievements.
+
+| Column | Type | Description |
+|-------|------|-------------|
+| `id` | integer (Primary Key) | Unique identifier for each achievement |
+| `name` | text | Achievement title |
+| `description` | text | Description of the achievement |
+| `threshold` | integer | Number of parks required to unlock |
+
+### 4. `user_achievements`
+Tracks which achievements have been unlocked by each user.
+
+| Column | Type | Description |
+|-------|------|-------------|
+| `id` | integer (Primary Key) | Unique identifier |
+| `user_id` | text | Anonymous UUID |
+| `achievement_id` | integer (Foreign Key) | References `achievements.id` |
+| `unlocked_at` | timestamp | Date and time the achievement was unlocked |
+
+### Relationships
+- `visits.park_id` → `parks.id`
+- `user_achievements.achievement_id` → `achievements.id`
+- `user_id` links user-specific data across tables.
+
+### Future Enhancements
+- A `states` table to support multi-state expansion.
+- Additional fields for geolocation (latitude and longitude).
+- Supabase Storage integration for photo uploads.
+
+## 🚀 Deployment Instructions
+
+The State Parks Passport application is deployed using **Vercel**, with source code managed in **GitHub**. The deployment process is fully automated through GitHub integration.
+
+### 1. Push Code to GitHub
+Ensure your project is committed and pushed to your GitHub repository:
+
+```bash
+git add .
+git commit -m "Prepare project for deployment"
+git push origin main
+
+## 🚀 Deployment Instructions
+
+### 2. Import the Repository into Vercel
+
+1. Log in to **https://vercel.com**.
+2. Click **Add New Project**.
+3. Select your GitHub repository.
+4. Accept the default build settings (no build command is required for static sites).
+5. Click **Deploy**.
+
+### 3. Configure Environment Variables
+
+The project uses an `env.js` file to store Supabase credentials. However, you may optionally configure these values within Vercel for additional flexibility and security.
+
+If you choose to use Vercel environment variables:
+
+1. Navigate to your project dashboard in Vercel.
+2. Go to **Settings → Environment Variables**.
+3. Add the following variables:
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+4. Update your `env.js` file to reference these variables if needed.
+
+> **Note:** Ensure that `env.js` is included in your `.gitignore` file to prevent sensitive information from being committed to the repository.
+
+### 4. Automatic Deployments
+
+- Every push to the **`main`** branch triggers a new **production deployment**.
+- **Preview deployments** are automatically generated for pull requests (if pull requests are used), allowing you to test changes before merging.
+
+### 5. Custom Domain
+
+To connect a custom domain:
+
+1. Navigate to your project in Vercel.
+2. Go to **Settings → Domains**.
+3. Add your custom domain (e.g., `stateparkspassport.com`).
+4. Update your DNS records as instructed by Vercel.
+5. Once DNS propagation is complete, your application will be accessible via the custom domain.
+
+### 6. Enable Vercel Analytics
+
+To enable privacy-friendly analytics, add the following script to each HTML page just before the closing `</body>` tag:
+
+```html
+<script defer src="/_vercel/insights/script.js"></script>
 
 ## 🔐 Privacy-First Design
 
@@ -155,3 +240,91 @@ The State Parks Passport application is built with a focus on simplicity, scalab
 - **Mobile-First Design** – Ensures optimal usability on smartphones and tablets.
 - **Privacy-First Approach** – No personal user data is collected; users are identified only by an anonymous UUID.
 - **Simplicity & Maintainability** – Avoids frameworks and overengineering to keep the codebase approachable and easy to extend.
+
+## ✅ Key Functions
+
+```markdown
+## 🔑 Key Functions
+
+The application logic is centralized within a single `app.js` file. The following functions play a critical role in managing data and user interactions.
+
+### `safeFetch(endpoint, options, returnType)`
+A reusable helper function that standardizes API communication and error handling.
+
+- Handles HTTP errors consistently.
+- Supports JSON and non-JSON responses.
+- Provides user-friendly error alerts.
+- Simplifies all Supabase API interactions.
+
+### `getHeaders()`
+Returns the required headers for authenticating requests to the Supabase REST API.
+
+- Includes the `apikey` and `Authorization` bearer token.
+- Ensures consistent request configuration across the application.
+
+### `fetchVisits()`
+Retrieves all visit records associated with the current user.
+
+- Filters results using the anonymous `USER_ID`.
+- Updates the application state with the user's visit history.
+
+### `saveVisit(parkId, visitDate, notes)`
+Creates a new visit record in the `visits` table.
+
+- Accepts a park ID, visit date, and optional notes.
+- Returns the created record for immediate UI updates.
+
+### `deleteVisit(parkId)`
+Removes a visit record for the specified park.
+
+- Ensures only the current user's visit is deleted.
+- Used by the visit toggle functionality.
+
+### `handleVisitClick()`
+Manages the logic for toggling a park’s visited status.
+
+- Determines whether to create or delete a visit.
+- Refreshes the application state.
+- Triggers achievement checks and UI updates.
+
+### `checkAchievements()`
+Evaluates whether the user has reached new achievement thresholds.
+
+- Compares the number of unique parks visited against defined milestones.
+- Inserts new records into `user_achievements` when thresholds are met.
+
+### `renderApp()`
+Controls the rendering of the user interface based on the current application state.
+
+- Updates views such as the dashboard, park list, and detail view.
+- Ensures a consistent and responsive user experience.
+
+### `updateTotalProgress()`
+Calculates and updates the total parks visited progress bar.
+
+- Provides users with visual feedback on their overall progress.
+
+## 📄 License
+
+This project is licensed under the **MIT License**, which permits reuse, modification, and distribution with minimal restrictions.
+
+### MIT License
+
+Copyright (c) 2026
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
