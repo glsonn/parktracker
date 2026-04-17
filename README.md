@@ -1,6 +1,6 @@
 # 📘 Project Overview
 
-State Parks Passport is a mobile-first web application that allows users to track visits to state parks, celebrate milestones through achievements, and build a personal record of their outdoor adventures. The platform is designed to be simple, privacy-conscious, and scalable, beginning with the Wisconsin State Parks system as its first edition, with the long-term vision of expanding to include parks across the United States.
+Project Tracker is a mobile-first web application that allows users to track visits to state parks, celebrate milestones through achievements, and build a personal record of their outdoor adventures. The platform is designed to be simple, privacy-conscious, and scalable, beginning with the Wisconsin State Parks system as its first edition, with the long-term vision of expanding to include parks across the United States.
 
 The application functions as a digital “passport,” enabling users to mark parks as visited, record visit dates and optional notes, and visualize their progress through intuitive dashboards and achievement milestones. By eliminating the need for traditional user accounts and instead utilizing an anonymous UUID stored in the browser’s local storage, the app offers a frictionless onboarding experience while maintaining user privacy.
 
@@ -130,7 +130,7 @@ Tracks which achievements have been unlocked by each user.
 
 ## 🚀 Deployment Instructions
 
-The State Parks Passport application is deployed using **Vercel**, with source code managed in **GitHub**. The deployment process is fully automated through GitHub integration.
+The Park Tracker application is deployed using **Vercel**, with source code managed in **GitHub**. The deployment process is fully automated through GitHub integration.
 
 ### 1. Push Code to GitHub
 Ensure your project is committed and pushed to your GitHub repository:
@@ -173,7 +173,7 @@ To connect a custom domain:
 
 1. Navigate to your project in Vercel.
 2. Go to **Settings → Domains**.
-3. Add your custom domain (e.g., `stateparkspassport.com`).
+3. Add your custom domain (e.g., `parktracker.app`).
 4. Update your DNS records as instructed by Vercel.
 5. Once DNS propagation is complete, your application will be accessible via the custom domain.
 
@@ -213,7 +213,7 @@ While the initial release focuses on Wisconsin, the platform is architected for 
 
 ## 🛠️ Tech Stack
 
-The State Parks Passport application is built with a focus on simplicity, scalability, and maintainability. The technology choices prioritize a lightweight architecture while enabling future expansion to additional states and features.
+The Park Tracker application is built with a focus on simplicity, scalability, and maintainability. The technology choices prioritize a lightweight architecture while enabling future expansion to additional states and features.
 
 ### Frontend
 - **HTML5** – Provides the structural foundation for the application.
