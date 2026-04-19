@@ -7,7 +7,20 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="app-container">
+    <!-- LANDING VIEW -->
+    <div id="landing-view">
+      <div class="app-container">
+        <div class="landing-content">
+          <h1>ParkTracker</h1>
+          <p>Track your visits. Build your park passport.</p>
+
+          <button id="start-button">Start Exploring</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- APP VIEW -->
+    <div id="app-view" class="app-container" style="display: none">
       <h1>Wisconsin State Parks</h1>
 
       <div id="nav">
@@ -90,7 +103,13 @@
     <footer class="app-footer">
       <a href="/index.html">Home</a> |
       <a href="/privacy.html">Privacy Policy</a> |
-      <a href="/terms.html">Terms of Use</a>
+      <a href="/terms.html">Terms of Use</a> |
+      <span
+        >Contact:
+        <a href="mailto:contact@parktracker.app"
+          >contact@parktracker.app</a
+        ></span
+      >
     </footer>
     <script defer src="/_vercel/insights/script.js"></script>
   </body>

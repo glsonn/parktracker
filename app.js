@@ -338,6 +338,21 @@ function renderVisitCounter(count) {
   DOM.visitCounter.textContent = `You've visited ${count} parks • ${remaining} left`;
 }
 
+function showLandingView() {
+  DOM.appView.style.display = "none";
+  DOM.landingView.style.display = "block";
+}
+
+function showApp() {
+  DOM.landingView.style.display = "none";
+  DOM.appView.style.display = "block";
+
+  // Ensure a clean starting state
+  DOM.dashboardView.style.display = "none";
+  DOM.listView.style.display = "none";
+  DOM.detailView.style.display = "none";
+}
+
 function showDashboardView() {
   state.currentView = "dashboard";
 
@@ -363,8 +378,9 @@ function showParksView() {
 function showDetailView() {
   state.currentView = "detail";
 
-  DOM.listView.style.display = "none";
   DOM.detailView.style.display = "block";
+  DOM.listView.style.display = "none";
+  DOM.dashboardView.style.display = "none";
   DOM.filterContainer.style.display = "none";
 
   renderApp();
@@ -377,6 +393,7 @@ function showListView() {
     showParksView();
   }
 }
+
 function renderAchievements(newlyUnlockedId = null) {
   DOM.achievementsList.innerHTML = "";
 
@@ -579,6 +596,9 @@ async function loadApp() {
   // CACHE DOM
   // ======================
   DOM = {
+    startButton: document.getElementById("start-button"),
+    landingView: document.getElementById("landing-view"),
+    appView: document.getElementById("app-view"),
     navDashboard: document.getElementById("nav-dashboard"),
     navParks: document.getElementById("nav-parks"),
     dashboardView: document.getElementById("dashboard-view"),
@@ -607,6 +627,7 @@ async function loadApp() {
     visitNotes: document.getElementById("visit-notes"),
   };
 
+  showLandingView();
   setLoading(DOM.parksList, "Loading parks...");
   setLoading(DOM.recentVisits, "Loading recent visits...");
 
@@ -636,6 +657,10 @@ async function loadApp() {
   // ======================
   // EVENT LISTENERS
   // ======================
+  DOM.startButton.addEventListener("click", () => {
+    showApp();
+    showDashboardView();
+  });
   DOM.navDashboard.addEventListener("click", showDashboardView);
   DOM.navParks.addEventListener("click", showParksView);
   DOM.visitButton.addEventListener("click", handleVisitClick);
@@ -643,11 +668,6 @@ async function loadApp() {
   DOM.filterUnvisited.addEventListener("change", () => {
     renderParkList(getFilteredParks());
   });
-
-  // ======================
-  // SET DEFAULT VIEW
-  // ======================
-  showDashboardView();
 }
 
 // ======================
