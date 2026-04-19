@@ -13,6 +13,46 @@ body {
   text-align: center;
 }
 
+.tagline {
+  margin: 0.5rem 0 1.5rem;
+  font-size: 1rem;
+  opacity: 0.8;
+}
+
+.landing-section {
+  margin-top: 2rem;
+  text-align: left;
+}
+
+.landing-section h2 {
+  font-size: 1.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.feature-list {
+  padding-left: 1.2rem;
+}
+
+.feature-list li {
+  margin-bottom: 0.5rem;
+}
+
+/* Screenshots */
+.screenshot-container {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.screenshot-container img {
+  width: 70%;
+  max-width: 250px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
 li {
   cursor: pointer;
 }
