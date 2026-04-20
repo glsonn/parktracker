@@ -447,6 +447,8 @@ function renderNextAchievement() {
     DOM.nextAchievementTitle.textContent =
       "You’ve unlocked every achievement 🎉";
 
+    DOM.nextAchievementDescription.textContent = ""; // 👈 add this
+
     DOM.progressBar.style.width = "100%";
     DOM.progressBar.style.backgroundColor = "#16a34a";
 
@@ -456,6 +458,7 @@ function renderNextAchievement() {
   }
 
   DOM.nextAchievementTitle.textContent = next.title;
+  DOM.nextAchievementDescription.textContent = next.description;
 
   // calculate percent
   const percent = Math.min((visitCount / next.threshold) * 100, 100);
@@ -615,6 +618,9 @@ async function loadApp() {
     achievementsPanel: document.getElementById("achievements-panel"),
     achievementsList: document.getElementById("achievements-list"),
     nextAchievementTitle: document.getElementById("next-achievement-title"),
+    nextAchievementDescription: document.getElementById(
+      "next-achievement-description",
+    ),
     visitDateInput: document.getElementById("visit-date"),
     progressBar: document.getElementById("progress-bar"),
     progressText: document.getElementById("progress-text"),
