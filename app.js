@@ -162,6 +162,47 @@ async function deleteVisit(parkId) {
   );
 }
 
+// ======================
+// RESET for DEV only
+// ======================
+async function resetApp() {
+  const confirmed = confirm("Reset app to first-time state?");
+  if (!confirmed) return;
+
+  try {
+    const userId = getUserId();
+
+    console.log("Resetting user:", userId);
+
+    // 1. Delete ALL visits for this user (REST API version)
+    const result = await safeFetch(
+      `${SUPABASE_URL}/rest/v1/visits?user_id=eq.${userId}`,
+      {
+        method: "DELETE",
+        headers: getHeaders(),
+      },
+      "none",
+    );
+
+    if (!result) {
+      console.error("Failed to delete visits");
+      return;
+    }
+
+    // 2. Clear in-memory state
+    state.visits = [];
+
+    // 3. Clear storage (resets user ID too)
+    localStorage.clear();
+    sessionStorage.clear();
+
+    // 4. Reload
+    location.reload();
+  } catch (err) {
+    console.error("Reset failed:", err);
+  }
+}
+
 async function unlockAchievement(achievement) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/user_achievements`, {
     method: "POST",
@@ -335,7 +376,9 @@ function renderVisitCounter(count) {
   const total = state.parks.length;
   const remaining = total - count;
 
-  DOM.visitCounter.textContent = `You've visited ${count} parks • ${remaining} left`;
+  const parkLabel = count === 1 ? "park" : "parks";
+
+  DOM.visitCounter.textContent = `You've visited ${count} ${parkLabel} • ${remaining} left`;
 }
 
 function showLandingView() {
@@ -682,3 +725,13 @@ async function loadApp() {
 document.addEventListener("DOMContentLoaded", () => {
   loadApp();
 });
+
+// ======================
+// DEV MODE for RESET locally
+// ======================
+const DEV_MODE =
+  location.hostname === "127.0.0.1" || location.hostname === "localhost";
+
+if (DEV_MODE) {
+  window.resetApp = resetApp;
+}
