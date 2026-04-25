@@ -636,6 +636,15 @@ async function handleVisitClick() {
 async function loadApp() {
   // console.log("App loading...");
 
+  // DEV: URL-based reset (works on iPhone)
+  if (window.location.hash === "#reset") {
+    localStorage.clear();
+    sessionStorage.clear();
+    location.hash = ""; // prevent infinite loop
+    location.reload();
+    return; // stop further execution
+  }
+
   await ensureUserExists();
 
   // ======================
