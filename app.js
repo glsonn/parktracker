@@ -232,8 +232,7 @@ async function unlockAchievement(achievement) {
 
 async function checkAchievements() {
   // console.log("Checking achievements...");
-  const visitCount = new Set(state.visits.map((v) => v.park_id)).size;
-
+  const visitCount = getVisitCount();
   const unlockedIds = new Set(
     state.userAchievements.map((a) => a.achievement_id),
   );
@@ -283,6 +282,42 @@ function sortVisitsByDate(visits) {
 
 function setLoading(element, message) {
   element.innerHTML = `<p class="loading">${message}</p>`;
+}
+
+function getVisitCount() {
+  return new Set(state.visits.map((v) => v.park_id)).size;
+}
+
+function getNextAchievement() {
+  return (
+    state.achievements
+      .filter(
+        (a) => !state.userAchievements.some((ua) => ua.achievement_id === a.id),
+      )
+      .sort((a, b) => a.threshold - b.threshold)[0] || null
+  );
+}
+
+function getProgressMessage(visitCount, nextAchievement) {
+  if (!nextAchievement) {
+    return "You've visited every park. That's no small thing.";
+  }
+
+  const remaining = nextAchievement.threshold - visitCount;
+
+  if (visitCount === 0) {
+    return "Every journey starts with the first park.";
+  }
+
+  if (remaining === 1) {
+    return "Just one more park to reach your next milestone.";
+  }
+
+  if (remaining <= 3) {
+    return `You're ${remaining} parks away from your next achievement.`;
+  }
+
+  return "You're building something here. Keep going.";
 }
 
 // ======================
@@ -450,7 +485,7 @@ function renderAchievements(newlyUnlockedId = null) {
     return;
   }
 
-  const visitCount = new Set(state.visits.map((v) => v.park_id)).size;
+  const visitCount = getVisitCount();
 
   for (const achievement of state.achievements) {
     const unlocked = state.userAchievements.some(
@@ -476,14 +511,8 @@ function renderAchievements(newlyUnlockedId = null) {
 }
 
 function renderNextAchievement() {
-  const visitCount = new Set(state.visits.map((v) => v.park_id)).size;
-
-  // find next locked achievement
-  const next = state.achievements
-    .filter(
-      (a) => !state.userAchievements.some((ua) => ua.achievement_id === a.id),
-    )
-    .sort((a, b) => a.threshold - b.threshold)[0];
+  const visitCount = getVisitCount();
+  const next = getNextAchievement();
 
   // all achievements unlocked
   if (!next) {
@@ -520,7 +549,9 @@ function renderNextAchievement() {
   DOM.progressBar.style.backgroundColor = color;
 
   // progress text
-  DOM.progressText.textContent = `${visitCount} / ${next.threshold}`;
+  DOM.progressText.textContent = `${visitCount} of ${next.threshold} parks visited`;
+
+  DOM.progressMessage.textContent = getProgressMessage(visitCount, next);
 }
 
 function renderRecentVisits() {
@@ -565,8 +596,7 @@ function updateTotalProgress() {
 
   if (totalParks === 0) return;
 
-  const visitedCount = new Set(state.visits.map((v) => v.park_id)).size;
-
+  const visitedCount = getVisitCount();
   const percent = Math.round((visitedCount / totalParks) * 100);
 
   DOM.totalProgressBar.style.width = percent + "%";
@@ -682,6 +712,7 @@ async function loadApp() {
     recentVisits: document.getElementById("recent-visits"),
     totalProgressBar: document.getElementById("total-progress-bar"),
     totalProgressText: document.getElementById("total-progress-text"),
+    progressMessage: document.getElementById("progress-message"),
     visitNotes: document.getElementById("visit-notes"),
   };
 
