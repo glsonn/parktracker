@@ -324,3 +324,21 @@ button:hover {
   text-decoration: none;
   font-size: 0.95rem;
 }
+
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #222;
+  color: #fff;
+  padding: 12px 18px;
+  border-radius: 10px;
+  opacity: 0.95;
+  font-size: 14px;
+  z-index: 1000;
+}
+
+.hidden {
+  display: none;
+}

@@ -221,10 +221,14 @@ async function unlockAchievement(achievement) {
     console.error(await res.text());
     return;
   }
+  // update local state
   state.userAchievements.push({
     achievement_id: achievement.id,
     unlocked_at: new Date().toISOString(),
   });
+
+  // show toast
+  showAchievementToast(achievement);
 
   // re-render and highlight the new one
   renderAchievements(achievement.id);
@@ -318,6 +322,21 @@ function getProgressMessage(visitCount, nextAchievement) {
   }
 
   return "You're building something here. Keep going.";
+}
+
+let toastTimeout;
+
+function showAchievementToast(achievement) {
+  const el = DOM.toast;
+
+  clearTimeout(toastTimeout);
+
+  el.textContent = `Achievement unlocked: ${achievement.title}`;
+  el.classList.remove("hidden");
+
+  toastTimeout = setTimeout(() => {
+    el.classList.add("hidden");
+  }, 3000);
 }
 
 // ======================
@@ -714,6 +733,7 @@ async function loadApp() {
     totalProgressText: document.getElementById("total-progress-text"),
     progressMessage: document.getElementById("progress-message"),
     visitNotes: document.getElementById("visit-notes"),
+    toast: document.getElementById("toast"),
   };
 
   showLandingView();
