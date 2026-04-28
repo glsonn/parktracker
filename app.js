@@ -23,20 +23,28 @@ function getUserId() {
 const USER_ID = getUserId();
 
 // Ensure the user exists in the database
-async function ensureUserExists() {
-  await fetch(`${SUPABASE_URL}/rest/v1/users`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      Prefer: "resolution=ignore-duplicates",
-    },
-    body: JSON.stringify({
-      id: USER_ID,
-    }),
-  });
-}
+// ======================
+// Commented out this function because no 'users' table exists
+//  and is not currently needed
+// ======================
+//async function ensureUserExists() {
+//  const { error } = await safeFetch(`${SUPABASE_URL}/rest/v1/users`, {
+//    method: "POST",
+//    headers: {
+//      "Content-Type": "application/json",
+//      apikey: SUPABASE_ANON_KEY,
+//      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+//      Prefer: "resolution=ignore-duplicates",
+//    },
+//    body: JSON.stringify({
+//      id: USER_ID,
+//    }),
+//  });
+//
+//  if (error) {
+//    console.error("ensureUserExists failed:", error);
+//  }
+//}
 
 // ======================
 // STATE
@@ -59,27 +67,22 @@ let DOM = {};
 // DATA FUNCTIONS
 // ======================
 // Generic helper for Supabase REST API calls
-async function safeFetch(endpoint, options = {}, returnType = "json") {
+async function safeFetch(endpoint, options = {}) {
   try {
     const res = await fetch(endpoint, options);
 
-    if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error(errorText || `Request failed with status ${res.status}`);
-    }
-
-    // For operations like DELETE where no body is expected
-    if (returnType === "none") {
-      return true;
-    }
-
-    // Attempt to parse JSON if present
     const text = await res.text();
-    return text ? JSON.parse(text) : true; // Return true if no content
-  } catch (error) {
-    console.error("Fetch error:", error);
-    alert("Something went wrong. Please try again.");
-    return null; // Consistent failure indicator
+
+    if (!res.ok) {
+      return { data: null, error: text || `Request failed: ${res.status}` };
+    }
+
+    const data = text ? JSON.parse(text) : null;
+
+    return { data, error: null };
+  } catch (err) {
+    console.error("Fetch error:", err);
+    return { data: null, error: err.message };
   }
 }
 
@@ -93,21 +96,35 @@ function getHeaders(additionalHeaders = {}) {
 }
 
 async function fetchParks() {
-  return await safeFetch(`${SUPABASE_URL}/rest/v1/parks?select=*`, {
-    headers: getHeaders(),
-  });
+  const { data, error } = await safeFetch(
+    `${SUPABASE_URL}/rest/v1/parks?select=*`,
+    { headers: getHeaders() },
+  );
+
+  if (error) {
+    console.error("fetchParks failed:", error);
+    return [];
+  }
+
+  return data || [];
 }
 
 async function fetchVisits() {
-  const result = await safeFetch(
+  const { data, error } = await safeFetch(
     `${SUPABASE_URL}/rest/v1/visits?user_id=eq.${USER_ID}&select=*`,
     { headers: getHeaders() },
   );
-  return result || []; // Ensure an array for rendering
+
+  if (error) {
+    console.error("fetchVisits failed:", error);
+    return [];
+  }
+
+  return data || [];
 }
 
 async function fetchVisitedStatus(parkId) {
-  const res = await fetch(
+  const { data, error } = await safeFetch(
     `${SUPABASE_URL}/rest/v1/visits?user_id=eq.${USER_ID}&park_id=eq.${parkId}&select=id`,
     {
       headers: {
@@ -116,23 +133,41 @@ async function fetchVisitedStatus(parkId) {
       },
     },
   );
-  const data = await res.json();
-  return data.length > 0;
+
+  if (error) {
+    console.error("fetchVisitedStatus failed:", error);
+    return false; // safe fallback
+  }
+
+  return Array.isArray(data) && data.length > 0;
 }
 
 async function fetchAchievements() {
-  return await safeFetch(`${SUPABASE_URL}/rest/v1/achievements?select=*`, {
-    headers: getHeaders(),
-  });
+  const { data, error } = await safeFetch(
+    `${SUPABASE_URL}/rest/v1/achievements?select=*`,
+    { headers: getHeaders() },
+  );
+
+  if (error) {
+    console.error("fetchAchievements failed:", error);
+    return [];
+  }
+
+  return data || [];
 }
 
 async function fetchUserAchievements() {
-  return await safeFetch(
+  const { data, error } = await safeFetch(
     `${SUPABASE_URL}/rest/v1/user_achievements?user_id=eq.${USER_ID}&select=*`,
-    {
-      headers: getHeaders(),
-    },
+    { headers: getHeaders() },
   );
+
+  if (error) {
+    console.error("fetchUserAchievements failed:", error);
+    return [];
+  }
+
+  return data || [];
 }
 
 async function saveVisit(parkId, visitDate, notes) {
@@ -204,27 +239,34 @@ async function resetApp() {
 }
 
 async function unlockAchievement(achievement) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/user_achievements`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+  const unlockedAt = new Date().toISOString();
+
+  const { error } = await safeFetch(
+    `${SUPABASE_URL}/rest/v1/user_achievements`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        user_id: USER_ID,
+        achievement_id: achievement.id,
+        unlocked_at: unlockedAt,
+      }),
     },
-    body: JSON.stringify({
-      user_id: USER_ID,
-      achievement_id: achievement.id,
-      unlocked_at: new Date().toISOString(),
-    }),
-  });
-  if (!res.ok) {
-    console.error(await res.text());
+  );
+
+  if (error) {
+    console.error("unlockAchievement failed:", error);
     return;
   }
+
   // update local state
   state.userAchievements.push({
     achievement_id: achievement.id,
-    unlocked_at: new Date().toISOString(),
+    unlocked_at: unlockedAt,
   });
 
   // show toast
@@ -289,6 +331,7 @@ function setLoading(element, message) {
 }
 
 function getVisitCount() {
+  if (!Array.isArray(state.visits)) return 0;
   return new Set(state.visits.map((v) => v.park_id)).size;
 }
 
@@ -694,7 +737,8 @@ async function loadApp() {
     return; // stop further execution
   }
 
-  await ensureUserExists();
+  // Commented out because function not needed now
+  //  await ensureUserExists();
 
   // ======================
   // CACHE DOM
