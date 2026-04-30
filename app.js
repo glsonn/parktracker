@@ -518,38 +518,87 @@ function showListView() {
 function renderAchievements(newlyUnlockedId = null) {
   DOM.achievementsList.innerHTML = "";
 
-  if (state.userAchievements.length === 0) {
-    DOM.achievementsList.innerHTML = `
-          <div class="empty-state">
-            <p>No achievements unlocked yet.</p>
-            <p>Keep exploring to earn your first one 🏆</p>
-          </div>
-        `;
-    return;
-  }
-
   const visitCount = getUniqueParkCount();
 
+  const unlocked = [];
+  const locked = [];
+
   for (const achievement of state.achievements) {
-    const unlocked = state.userAchievements.some(
+    const isUnlocked = state.userAchievements.some(
       (ua) => ua.achievement_id === achievement.id,
     );
 
-    const li = document.createElement("li");
-
-    if (unlocked) {
-      li.textContent = `🏆 ${achievement.title}`;
+    if (isUnlocked) {
+      unlocked.push(achievement);
     } else {
-      li.textContent = `🔒 ${achievement.title} (${visitCount}/${achievement.threshold})`;
-      li.style.opacity = "0.5";
+      locked.push(achievement);
     }
+  }
 
-    // highlight newly unlocked
-    if (newlyUnlockedId && achievement.id === newlyUnlockedId) {
-      li.classList.add("achievement-new");
-    }
+  // ======================
+  // EMPTY STATE (no unlocked yet)
+  // ======================
+  if (unlocked.length === 0) {
+    DOM.achievementsList.innerHTML = `
+      <div class="empty-state">
+        <p>No achievements unlocked yet.</p>
+        <p>Keep exploring to earn your first one 🏆</p>
+      </div>
+    `;
+  }
 
-    DOM.achievementsList.appendChild(li);
+  // ======================
+  // UNLOCKED SECTION
+  // ======================
+  if (unlocked.length > 0) {
+    const unlockedSection = document.createElement("div");
+    unlockedSection.className = "achievement-section";
+
+    const title = document.createElement("h3");
+    title.textContent = "Unlocked";
+    unlockedSection.appendChild(title);
+
+    unlocked.forEach((achievement) => {
+      const div = document.createElement("div");
+      div.className = "achievement-item unlocked";
+      div.textContent = `🏆 ${achievement.title}`;
+
+      if (newlyUnlockedId && achievement.id === newlyUnlockedId) {
+        div.classList.add("achievement-new");
+      }
+
+      unlockedSection.appendChild(div);
+    });
+
+    DOM.achievementsList.appendChild(unlockedSection);
+  }
+
+  // ======================
+  // LOCKED SECTION
+  // ======================
+  if (locked.length > 0) {
+    const lockedSection = document.createElement("div");
+    lockedSection.className = "achievement-section";
+
+    const title = document.createElement("h3");
+    title.textContent = "Coming Up";
+    lockedSection.appendChild(title);
+
+    locked.forEach((achievement) => {
+      const div = document.createElement("div");
+      div.className = "achievement-item locked";
+
+      div.innerHTML = `
+        <div>🔒 ${achievement.title}</div>
+        <div class="achievement-progress">
+          ${visitCount} / ${achievement.threshold}
+        </div>
+      `;
+
+      lockedSection.appendChild(div);
+    });
+
+    DOM.achievementsList.appendChild(lockedSection);
   }
 }
 

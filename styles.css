@@ -342,3 +342,28 @@ button:hover {
 .hidden {
   display: none;
 }
+
+.achievement-section {
+  margin-bottom: 1rem;
+}
+
+.achievement-section h3 {
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.achievement-item {
+  padding: 6px 0;
+}
+
+.achievement-item.locked {
+  opacity: 0.5;
+}
+
+.achievement-progress {
+  font-size: 0.8rem;
+  opacity: 0.7;
+  margin-left: 1.2rem;
+}
