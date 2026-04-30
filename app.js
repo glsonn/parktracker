@@ -123,25 +123,6 @@ async function fetchVisits() {
   return data || [];
 }
 
-async function fetchVisitedStatus(parkId) {
-  const { data, error } = await safeFetch(
-    `${SUPABASE_URL}/rest/v1/visits?user_id=eq.${USER_ID}&park_id=eq.${parkId}&select=id`,
-    {
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-    },
-  );
-
-  if (error) {
-    console.error("fetchVisitedStatus failed:", error);
-    return false; // safe fallback
-  }
-
-  return Array.isArray(data) && data.length > 0;
-}
-
 async function fetchAchievements() {
   const { data, error } = await safeFetch(
     `${SUPABASE_URL}/rest/v1/achievements?select=*`,
@@ -278,7 +259,7 @@ async function unlockAchievement(achievement) {
 
 async function checkAchievements() {
   // console.log("Checking achievements...");
-  const visitCount = getVisitCount();
+  const visitCount = getUniqueParkCount();
   const unlockedIds = new Set(
     state.userAchievements.map((a) => a.achievement_id),
   );
@@ -330,7 +311,7 @@ function setLoading(element, message) {
   element.innerHTML = `<p class="loading">${message}</p>`;
 }
 
-function getVisitCount() {
+function getUniqueParkCount() {
   if (!Array.isArray(state.visits)) return 0;
   return new Set(state.visits.map((v) => v.park_id)).size;
 }
@@ -386,7 +367,7 @@ function showAchievementToast(achievement) {
 // RENDER FUNCTIONS
 // ======================
 function renderApp() {
-  renderVisitCounter(state.visits.length);
+  renderVisitCounter(getUniqueParkCount());
   renderNextAchievement();
   renderAchievements();
 
@@ -547,7 +528,7 @@ function renderAchievements(newlyUnlockedId = null) {
     return;
   }
 
-  const visitCount = getVisitCount();
+  const visitCount = getUniqueParkCount();
 
   for (const achievement of state.achievements) {
     const unlocked = state.userAchievements.some(
@@ -573,7 +554,7 @@ function renderAchievements(newlyUnlockedId = null) {
 }
 
 function renderNextAchievement() {
-  const visitCount = getVisitCount();
+  const visitCount = getUniqueParkCount();
   const next = getNextAchievement();
 
   // all achievements unlocked
@@ -658,7 +639,7 @@ function updateTotalProgress() {
 
   if (totalParks === 0) return;
 
-  const visitedCount = getVisitCount();
+  const visitedCount = getUniqueParkCount();
   const percent = Math.round((visitedCount / totalParks) * 100);
 
   DOM.totalProgressBar.style.width = percent + "%";
@@ -803,7 +784,7 @@ async function loadApp() {
   // INITIAL RENDER
   // ======================
   renderParkList(getFilteredParks());
-  renderVisitCounter(state.visits.length);
+  renderVisitCounter(getUniqueParkCount());
   renderRecentVisits();
   updateTotalProgress();
 
