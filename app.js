@@ -713,13 +713,18 @@ async function showParkDetail(park) {
 }
 
 function getFilteredParks() {
-  if (!DOM.filterUnvisited.checked) {
-    return state.parks;
+  if (DOM.filterUnvisited.checked) {
+    return state.parks.filter(
+      (park) => !state.visits.some((v) => v.park_id === park.id),
+    );
   }
 
-  return state.parks.filter(
-    (park) => !state.visits.some((v) => v.park_id === park.id),
-  );
+  // only sort when showing all
+  return [...state.parks].sort((a, b) => {
+    const aVisited = state.visits.some((v) => v.park_id === a.id);
+    const bVisited = state.visits.some((v) => v.park_id === b.id);
+    return aVisited - bVisited;
+  });
 }
 
 async function handleVisitClick() {
