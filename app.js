@@ -258,17 +258,12 @@ async function unlockAchievement(achievement) {
 }
 
 async function checkAchievements() {
-  // console.log("Checking achievements...");
   const visitCount = getUniqueParkCount();
   const unlockedIds = new Set(
     state.userAchievements.map((a) => a.achievement_id),
   );
 
   let unlockedSomething = false;
-
-  // console.log("visitCount:", visitCount);
-  // console.log("achievements:", state.achievements);
-  // console.log("userAchievements:", state.userAchievements);
 
   for (const achievement of state.achievements) {
     const qualifies = visitCount >= Number(achievement.threshold);
@@ -284,6 +279,8 @@ async function checkAchievements() {
   if (!unlockedSomething) {
     renderAchievements();
   }
+
+  return unlockedSomething;
 }
 
 // ======================
@@ -350,17 +347,21 @@ function getProgressMessage(visitCount, nextAchievement) {
 
 let toastTimeout;
 
-function showAchievementToast(achievement) {
+function showToast(message) {
   const el = DOM.toast;
 
   clearTimeout(toastTimeout);
 
-  el.textContent = `Achievement unlocked: ${achievement.title}`;
+  el.textContent = message;
   el.classList.remove("hidden");
 
   toastTimeout = setTimeout(() => {
     el.classList.add("hidden");
   }, 3000);
+}
+
+function showAchievementToast(achievement) {
+  showToast(`Achievement unlocked: ${achievement.title}`);
 }
 
 // ======================
@@ -370,6 +371,7 @@ function renderApp() {
   renderVisitCounter(getUniqueParkCount());
   renderNextAchievement();
   renderAchievements();
+  updateTotalProgress();
 
   if (state.currentView === "dashboard") {
     renderRecentVisits();
@@ -726,6 +728,10 @@ async function handleVisitClick() {
   const parkId = state.currentPark.id;
   const alreadyVisited = state.visits.some((v) => v.park_id === parkId);
 
+  // Immediate UI feedback
+  DOM.visitButton.disabled = true;
+  DOM.visitButton.textContent = "Saving...";
+
   let result;
 
   if (alreadyVisited) {
@@ -739,8 +745,14 @@ async function handleVisitClick() {
     result = await saveVisit(parkId, visitDate, notes);
   }
 
-  // If safeFetch encountered an error, it will return null or false
-  if (!result) return;
+  if (!result) {
+    // restore button on failure
+    DOM.visitButton.disabled = false;
+    DOM.visitButton.textContent = alreadyVisited
+      ? "Remove Visit"
+      : "Mark as Visited";
+    return;
+  }
 
   // Refresh state
   state.visits = await fetchVisits();
@@ -750,9 +762,15 @@ async function handleVisitClick() {
     DOM.visitNotes.value = "";
   }
 
-  await checkAchievements();
+  // Check achievements FIRST
+  const unlockedSomething = await checkAchievements();
+
+  // Only show generic toast if no achievement
+  if (!unlockedSomething) {
+    showToast(alreadyVisited ? "Visit removed" : "Visit saved");
+  }
+
   renderApp();
-  updateTotalProgress();
 }
 
 async function loadApp() {
