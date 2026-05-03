@@ -174,7 +174,6 @@ async function deleteVisit(parkId) {
       method: "DELETE",
       headers: getHeaders(),
     },
-    "none", // No JSON body expected
   );
 }
 
@@ -197,7 +196,6 @@ async function resetApp() {
         method: "DELETE",
         headers: getHeaders(),
       },
-      "none",
     );
 
     if (!result) {
@@ -309,7 +307,6 @@ function setLoading(element, message) {
 }
 
 function getUniqueParkCount() {
-  if (!Array.isArray(state.visits)) return 0;
   return new Set(state.visits.map((v) => v.park_id)).size;
 }
 
@@ -364,6 +361,10 @@ function showAchievementToast(achievement) {
   showToast(`Achievement unlocked: ${achievement.title}`);
 }
 
+function isParkVisited(parkId) {
+  return state.visits.some((v) => v.park_id === parkId);
+}
+
 // ======================
 // RENDER FUNCTIONS
 // ======================
@@ -380,11 +381,9 @@ function renderApp() {
   if (state.currentView === "parks") {
     renderParkList(getFilteredParks());
   }
-
+  
   if (state.currentView === "detail" && state.currentPark) {
-    const visited = state.visits.some(
-      (v) => v.park_id === state.currentPark.id,
-    );
+    const visited = isParkVisited(state.currentPark.id);
     renderParkDetail(state.currentPark, visited);
   }
 }
@@ -406,7 +405,7 @@ function renderParkList(parks) {
     li.textContent = park.park_name;
 
     // show check mark if visited
-    const visited = state.visits.some((v) => v.park_id === park.id);
+    const visited = isParkVisited(park.id);
     if (visited) li.textContent += " ✓";
 
     li.style.cursor = "pointer";
@@ -507,14 +506,6 @@ function showDetailView() {
   DOM.filterContainer.style.display = "none";
 
   renderApp();
-}
-
-function showListView() {
-  if (state.currentView === "dashboard") {
-    showDashboardView();
-  } else {
-    showParksView();
-  }
 }
 
 function renderAchievements(newlyUnlockedId = null) {
@@ -702,28 +693,22 @@ function updateTotalProgress() {
 // ======================
 async function showParkDetail(park) {
   state.currentPark = park;
-
-  // Force "coming from parks"
-  state.currentView = "parks";
+  state.currentView = "detail";
 
   showDetailView();
-
-  const visited = state.visits.some((v) => v.park_id === park.id);
-  renderParkDetail(park, visited);
+  renderApp();
 }
 
 function getFilteredParks() {
   if (DOM.filterUnvisited.checked) {
-    return state.parks.filter(
-      (park) => !state.visits.some((v) => v.park_id === park.id),
-    );
+    return state.parks.filter((park) => !isParkVisited(park.id));
   }
 
   // only sort when showing all
   return [...state.parks].sort((a, b) => {
-    const aVisited = state.visits.some((v) => v.park_id === a.id);
-    const bVisited = state.visits.some((v) => v.park_id === b.id);
-    return aVisited - bVisited;
+    if (isParkVisited(a.id) && !isParkVisited(b.id)) return 1;
+    if (!isParkVisited(a.id) && isParkVisited(b.id)) return -1;
+    return 0;
   });
 }
 
@@ -731,7 +716,7 @@ async function handleVisitClick() {
   if (!state.currentPark) return;
 
   const parkId = state.currentPark.id;
-  const alreadyVisited = state.visits.some((v) => v.park_id === parkId);
+  const alreadyVisited = isParkVisited(parkId);
 
   // Immediate UI feedback
   DOM.visitButton.disabled = true;
@@ -790,9 +775,6 @@ async function loadApp() {
     return; // stop further execution
   }
 
-  // Commented out because function not needed now
-  //  await ensureUserExists();
-
   // ======================
   // CACHE DOM
   // ======================
@@ -833,6 +815,8 @@ async function loadApp() {
     toast: document.getElementById("toast"),
   };
 
+  DOM.filterUnvisited.checked = false;
+
   showLandingView();
   setLoading(DOM.parksList, "Loading parks...");
   setLoading(DOM.recentVisits, "Loading recent visits...");
@@ -848,17 +832,12 @@ async function loadApp() {
   // 🔥 IMPORTANT: sync achievements with visits
   await checkAchievements();
 
-  renderNextAchievement();
-
   // console.log("Data loaded:", state);
 
   // ======================
   // INITIAL RENDER
   // ======================
-  renderParkList(getFilteredParks());
-  renderVisitCounter(getUniqueParkCount());
-  renderRecentVisits();
-  updateTotalProgress();
+  renderApp();
 
   // ======================
   // EVENT LISTENERS
@@ -870,9 +849,9 @@ async function loadApp() {
   DOM.navDashboard.addEventListener("click", showDashboardView);
   DOM.navParks.addEventListener("click", showParksView);
   DOM.visitButton.addEventListener("click", handleVisitClick);
-  DOM.backButton.addEventListener("click", showListView);
+  DOM.backButton.addEventListener("click", showParksView);
   DOM.filterUnvisited.addEventListener("change", () => {
-    renderParkList(getFilteredParks());
+    renderApp();
   });
 }
 
