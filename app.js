@@ -34,6 +34,11 @@ const state = {
   currentView: "dashboard",
 };
 
+function setState(updates) {
+  Object.assign(state, updates);
+  renderApp();
+}
+
 // ======================
 // DOM CACHE (assigned in loadApp)
 // ======================
@@ -180,7 +185,7 @@ async function resetApp() {
     }
 
     // 2. Clear in-memory state
-    state.visits = [];
+    setState({ visits: [] });
 
     // 3. Clear storage (resets user ID too)
     localStorage.clear();
@@ -219,9 +224,14 @@ async function unlockAchievement(achievement) {
   }
 
   // update local state
-  state.userAchievements.push({
-    achievement_id: achievement.id,
-    unlocked_at: unlockedAt,
+  setState({
+    userAchievements: [
+      ...state.userAchievements,
+      {
+        achievement_id: achievement.id,
+        unlocked_at: unlockedAt,
+      },
+    ],
   });
 
   // show toast
@@ -733,7 +743,9 @@ async function handleVisitClick() {
   }
 
   // Refresh state
-  state.visits = await fetchVisits();
+  setState({
+    visits: await fetchVisits(),
+  });
 
   // Clear notes after saving
   if (DOM.visitNotes) {
@@ -747,13 +759,9 @@ async function handleVisitClick() {
   if (!unlockedSomething) {
     showToast(alreadyVisited ? "Visit removed" : "Visit saved");
   }
-
-  renderApp();
 }
 
 async function loadApp() {
-  // console.log("App loading...");
-
   // DEV: URL-based reset (works on iPhone)
   if (window.location.hash === "#reset") {
     localStorage.clear();
@@ -812,20 +820,20 @@ async function loadApp() {
   // ======================
   // FETCH DATA
   // ======================
-  state.parks = await fetchParks();
-  state.visits = await fetchVisits();
-  state.achievements = await fetchAchievements();
-  state.userAchievements = await fetchUserAchievements();
+  const parks = await fetchParks();
+  const visits = await fetchVisits();
+  const achievements = await fetchAchievements();
+  const userAchievements = await fetchUserAchievements();
+
+  setState({
+    parks,
+    visits,
+    achievements,
+    userAchievements,
+  });
 
   // 🔥 IMPORTANT: sync achievements with visits
   await checkAchievements();
-
-  // console.log("Data loaded:", state);
-
-  // ======================
-  // INITIAL RENDER
-  // ======================
-  renderApp();
 
   // ======================
   // EVENT LISTENERS
