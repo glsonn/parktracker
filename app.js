@@ -714,48 +714,75 @@ async function handleVisitClick() {
   if (!state.currentPark) return;
 
   const parkId = state.currentPark.id;
-  const alreadyVisited = isParkVisited(parkId);
 
-  // Immediate UI feedback
-  DOM.visitButton.disabled = true;
-  DOM.visitButton.textContent = "Saving...";
+  // align with visitedSet pattern
+  const visitedSet = new Set(state.visits.map((v) => v.park_id));
+  const alreadyVisited = visitedSet.has(parkId);
+
+  const previousVisits = [...state.visits];
+
+  const visitDate =
+    DOM.visitDateInput.value || new Date().toISOString().split("T")[0];
+
+  const notes = DOM.visitNotes?.value.trim() || null;
+
+  let updatedVisits;
+
+  if (alreadyVisited) {
+    updatedVisits = state.visits.filter((v) => v.park_id !== parkId);
+  } else {
+    updatedVisits = [
+      ...state.visits,
+      {
+        park_id: parkId,
+        visit_date: visitDate,
+        notes,
+      },
+    ];
+  }
+
+  // 🚀 optimistic update
+  setState({ visits: updatedVisits });
 
   let result;
 
   if (alreadyVisited) {
     result = await deleteVisit(parkId);
   } else {
-    const visitDate =
-      DOM.visitDateInput.value || new Date().toISOString().split("T")[0];
-
-    const notes = DOM.visitNotes.value.trim() || null;
-
     result = await saveVisit(parkId, visitDate, notes);
   }
 
-  if (!result) {
-    // restore button on failure
-    DOM.visitButton.disabled = false;
-    DOM.visitButton.textContent = alreadyVisited
-      ? "Remove Visit"
-      : "Mark as Visited";
+  // 🔁 rollback on failure
+  if (!result || result.error) {
+    // restore previous state
+    setState({ visits: previousVisits });
+
+    // helpful (dev-only) logging
+    if (result?.error) {
+      console.error("Visit action failed:", result.error);
+    }
+
+    // user-facing message
+    showToast(
+      alreadyVisited
+        ? "Couldn't remove visit. Please try again."
+        : "Couldn't save visit. Please try again.",
+    );
+
     return;
   }
 
-  // Refresh state
-  setState({
-    visits: await fetchVisits(),
-  });
-
-  // Clear notes after saving
+  // ✅ success → clear notes
   if (DOM.visitNotes) {
     DOM.visitNotes.value = "";
   }
 
-  // Check achievements FIRST
+  // 🔄 sync with DB
+  const freshVisits = await fetchVisits();
+  setState({ visits: freshVisits });
+
   const unlockedSomething = await checkAchievements();
 
-  // Only show generic toast if no achievement
   if (!unlockedSomething) {
     showToast(alreadyVisited ? "Visit removed" : "Visit saved");
   }
