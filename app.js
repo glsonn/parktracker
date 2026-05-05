@@ -22,30 +22,6 @@ function getUserId() {
 
 const USER_ID = getUserId();
 
-// Ensure the user exists in the database
-// ======================
-// Commented out this function because no 'users' table exists
-//  and is not currently needed
-// ======================
-//async function ensureUserExists() {
-//  const { error } = await safeFetch(`${SUPABASE_URL}/rest/v1/users`, {
-//    method: "POST",
-//    headers: {
-//      "Content-Type": "application/json",
-//      apikey: SUPABASE_ANON_KEY,
-//      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-//      Prefer: "resolution=ignore-duplicates",
-//    },
-//    body: JSON.stringify({
-//      id: USER_ID,
-//    }),
-//  });
-//
-//  if (error) {
-//    console.error("ensureUserExists failed:", error);
-//  }
-//}
-
 // ======================
 // STATE
 // ======================
@@ -365,30 +341,36 @@ function isParkVisited(parkId) {
   return state.visits.some((v) => v.park_id === parkId);
 }
 
+function getVisitedParkIds() {
+  return new Set(state.visits.map((v) => v.park_id));
+}
+
 // ======================
 // RENDER FUNCTIONS
 // ======================
 function renderApp() {
-  renderVisitCounter(getUniqueParkCount());
-  renderNextAchievement();
-  renderAchievements();
-  updateTotalProgress();
+  const visitedSet = getVisitedParkIds();
+
+  renderVisitCounter(visitedSet.size);
+  renderNextAchievement(visitedSet);
+  renderAchievements(null, visitedSet);
+  updateTotalProgress(visitedSet);
 
   if (state.currentView === "dashboard") {
-    renderRecentVisits();
+    renderRecentVisits(visitedSet);
   }
 
   if (state.currentView === "parks") {
-    renderParkList(getFilteredParks());
+    renderParkList(getFilteredParks(visitedSet), visitedSet);
   }
-  
+
   if (state.currentView === "detail" && state.currentPark) {
-    const visited = isParkVisited(state.currentPark.id);
+    const visited = visitedSet.has(state.currentPark.id);
     renderParkDetail(state.currentPark, visited);
   }
 }
 
-function renderParkList(parks) {
+function renderParkList(parks, visitedSet) {
   DOM.parksList.innerHTML = "";
 
   if (parks.length === 0) {
@@ -405,7 +387,7 @@ function renderParkList(parks) {
     li.textContent = park.park_name;
 
     // show check mark if visited
-    const visited = isParkVisited(park.id);
+    const visited = visitedSet.has(park.id);
     if (visited) li.textContent += " ✓";
 
     li.style.cursor = "pointer";
@@ -508,10 +490,11 @@ function showDetailView() {
   renderApp();
 }
 
-function renderAchievements(newlyUnlockedId = null) {
+function renderAchievements(newlyUnlockedId = null, visitedSet) {
+  visitedSet = visitedSet || getVisitedParkIds();
   DOM.achievementsList.innerHTML = "";
 
-  const visitCount = getUniqueParkCount();
+  const visitCount = visitedSet.size;
 
   const unlocked = [];
   const locked = [];
@@ -595,8 +578,10 @@ function renderAchievements(newlyUnlockedId = null) {
   }
 }
 
-function renderNextAchievement() {
-  const visitCount = getUniqueParkCount();
+function renderNextAchievement(visitedSet) {
+  visitedSet = visitedSet || getVisitedParkIds();
+
+  const visitCount = visitedSet.size;
   const next = getNextAchievement();
 
   // all achievements unlocked
@@ -639,7 +624,9 @@ function renderNextAchievement() {
   DOM.progressMessage.textContent = getProgressMessage(visitCount, next);
 }
 
-function renderRecentVisits() {
+function renderRecentVisits(visitedSet) {
+  visitedSet = visitedSet || getVisitedParkIds();
+
   const visits = sortVisitsByDate(state.visits);
 
   DOM.recentVisits.innerHTML = "";
@@ -676,12 +663,13 @@ function renderRecentVisits() {
   });
 }
 
-function updateTotalProgress() {
+function updateTotalProgress(visitedSet) {
+  visitedSet = visitedSet || getVisitedParkIds();
   const totalParks = state.parks.length;
 
   if (totalParks === 0) return;
 
-  const visitedCount = getUniqueParkCount();
+  const visitedCount = visitedSet.size;
   const percent = Math.round((visitedCount / totalParks) * 100);
 
   DOM.totalProgressBar.style.width = percent + "%";
@@ -699,15 +687,15 @@ async function showParkDetail(park) {
   renderApp();
 }
 
-function getFilteredParks() {
+function getFilteredParks(visitedSet) {
   if (DOM.filterUnvisited.checked) {
-    return state.parks.filter((park) => !isParkVisited(park.id));
+    return state.parks.filter((park) => !visitedSet.has(park.id));
   }
 
   // only sort when showing all
   return [...state.parks].sort((a, b) => {
-    if (isParkVisited(a.id) && !isParkVisited(b.id)) return 1;
-    if (!isParkVisited(a.id) && isParkVisited(b.id)) return -1;
+    if (visitedSet.has(a.id) && !visitedSet.has(b.id)) return 1;
+    if (!visitedSet.has(a.id) && visitedSet.has(b.id)) return -1;
     return 0;
   });
 }
