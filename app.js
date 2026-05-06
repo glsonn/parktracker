@@ -148,16 +148,6 @@ async function saveVisit(parkId, visitDate, notes) {
   });
 }
 
-async function deleteVisit(parkId) {
-  return await safeFetch(
-    `${SUPABASE_URL}/rest/v1/visits?user_id=eq.${USER_ID}&park_id=eq.${parkId}`,
-    {
-      method: "DELETE",
-      headers: getHeaders(),
-    },
-  );
-}
-
 // ======================
 // RESET for DEV only
 // ======================
@@ -375,8 +365,7 @@ function renderApp() {
   }
 
   if (state.currentView === "detail" && state.currentPark) {
-    const visited = visitedSet.has(state.currentPark.id);
-    renderParkDetail(state.currentPark, visited);
+    renderParkDetail(state.currentPark);
   }
 }
 
@@ -406,40 +395,48 @@ function renderParkList(parks, visitedSet) {
   });
 }
 
-function renderParkDetail(park, visited) {
+function renderParkDetail(park) {
   const today = new Date().toISOString().split("T")[0];
   DOM.visitDateInput.value = today;
+
   DOM.parkName.textContent = park.park_name;
   DOM.parkLocation.textContent = "📍 Nearest City: " + park.nearest_city;
   DOM.parkCounty.textContent = "🗺️ County: " + park.county;
   DOM.parkDescription.textContent = park.description;
 
-  DOM.visitButton.textContent = visited ? "Remove Visit" : "Mark as Visited";
-
+  DOM.visitButton.textContent = "Add Visit";
   DOM.visitButton.disabled = false;
 
+  // ✅ FIRST: derive visits
   const visitsForPark = sortVisitsByDate(
     state.visits.filter((v) => v.park_id === park.id),
   );
 
-  if (visitsForPark.length === 0) {
+  const visitCount = visitsForPark.length;
+
+  // ✅ THEN render everything in one pass
+  if (visitCount === 0) {
     DOM.visitHistory.innerHTML = `
-          <div class="empty-state">
-            <p>You haven’t logged a visit here yet.</p>
-            <p>When you do, it’ll show up here.</p>
-          </div>
-        `;
+      <p><strong>0</strong> visits</p>
+      <div class="empty-state">
+        <p>You haven’t logged a visit here yet.</p>
+        <p>When you do, it’ll show up here.</p>
+      </div>
+    `;
   } else {
-    DOM.visitHistory.innerHTML = visitsForPark
-      .map(
-        (v) => `
-    <div class="visit-entry">
-      <div>• ${formatDate(v.visit_date)}</div>
-      ${v.notes ? `<div class="visit-notes">${v.notes}</div>` : ""}
-    </div>
-  `,
-      )
-      .join("");
+    DOM.visitHistory.innerHTML = `
+      <p><strong>${visitCount}</strong> visit${visitCount === 1 ? "" : "s"}</p>
+      ${visitsForPark
+        .map(
+          (v) => `
+        <div class="visit-entry">
+          <div>• ${formatDate(v.visit_date)}</div>
+          ${v.notes ? `<div class="visit-notes">${v.notes}</div>` : ""}
+        </div>
+      `,
+        )
+        .join("")}
+    `;
   }
 }
 
@@ -715,10 +712,6 @@ async function handleVisitClick() {
 
   const parkId = state.currentPark.id;
 
-  // align with visitedSet pattern
-  const visitedSet = new Set(state.visits.map((v) => v.park_id));
-  const alreadyVisited = visitedSet.has(parkId);
-
   const previousVisits = [...state.visits];
 
   const visitDate =
@@ -726,65 +719,43 @@ async function handleVisitClick() {
 
   const notes = DOM.visitNotes?.value.trim() || null;
 
-  let updatedVisits;
+  const optimisticVisit = {
+    id: crypto.randomUUID(), // temp ID for UI
+    park_id: parkId,
+    visit_date: visitDate,
+    notes,
+  };
 
-  if (alreadyVisited) {
-    updatedVisits = state.visits.filter((v) => v.park_id !== parkId);
-  } else {
-    updatedVisits = [
-      ...state.visits,
-      {
-        park_id: parkId,
-        visit_date: visitDate,
-        notes,
-      },
-    ];
-  }
+  // 🚀 optimistic update (always ADD)
+  setState({
+    visits: [...state.visits, optimisticVisit],
+  });
 
-  // 🚀 optimistic update
-  setState({ visits: updatedVisits });
-
-  let result;
-
-  if (alreadyVisited) {
-    result = await deleteVisit(parkId);
-  } else {
-    result = await saveVisit(parkId, visitDate, notes);
-  }
+  const result = await saveVisit(parkId, visitDate, notes);
 
   // 🔁 rollback on failure
   if (!result || result.error) {
-    // restore previous state
     setState({ visits: previousVisits });
 
-    // helpful (dev-only) logging
-    if (result?.error) {
-      console.error("Visit action failed:", result.error);
-    }
+    console.error("Save visit failed:", result?.error);
 
-    // user-facing message
-    showToast(
-      alreadyVisited
-        ? "Couldn't remove visit. Please try again."
-        : "Couldn't save visit. Please try again.",
-    );
-
+    showToast("Couldn't save visit. Please try again.");
     return;
   }
 
-  // ✅ success → clear notes
+  // 🔄 sync with DB (simple + consistent with your pattern)
+  const freshVisits = await fetchVisits();
+  setState({ visits: freshVisits });
+
+  // clear notes
   if (DOM.visitNotes) {
     DOM.visitNotes.value = "";
   }
 
-  // 🔄 sync with DB
-  const freshVisits = await fetchVisits();
-  setState({ visits: freshVisits });
-
   const unlockedSomething = await checkAchievements();
 
   if (!unlockedSomething) {
-    showToast(alreadyVisited ? "Visit removed" : "Visit saved");
+    showToast("Visit saved");
   }
 }
 
