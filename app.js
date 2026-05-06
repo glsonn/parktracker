@@ -430,9 +430,20 @@ function renderParkDetail(park) {
         .map(
           (v) => `
         <div class="visit-entry">
-          <div>• ${formatDate(v.visit_date)}</div>
-          ${v.notes ? `<div class="visit-notes">${v.notes}</div>` : ""}
-        </div>
+          <div class="visit-entry">
+  <div class="visit-header">
+    <span>• ${formatDate(v.visit_date)}</span>
+    <button 
+      class="visit-delete-btn"
+      data-id="${v.id}"
+      aria-label="Delete visit"
+      title="Delete visit"
+    >
+      🗑️
+    </button>
+  </div>
+  ${v.notes ? `<div class="visit-notes">${v.notes}</div>` : ""}
+</div>
       `,
         )
         .join("")}
@@ -759,6 +770,47 @@ async function handleVisitClick() {
   }
 }
 
+async function handleVisitHistoryClick(e) {
+  const btn = e.target.closest(".visit-delete-btn");
+  if (!btn) return;
+
+  const visitId = btn.dataset.id;
+
+  const confirmed = confirm("Delete this visit?");
+  if (!confirmed) return;
+
+  const previousVisits = [...state.visits];
+
+  // 🚀 optimistic UI
+  setState({
+    visits: state.visits.filter((v) => v.id !== visitId),
+  });
+
+  const result = await deleteVisitById(visitId);
+
+  // 🔁 rollback on failure
+  if (!result || result.error) {
+    setState({ visits: previousVisits });
+
+    console.error("Delete failed:", result?.error);
+    showToast("Couldn't delete visit. Please try again.");
+    return;
+  }
+
+  // ✅ SUCCESS → sync with DB
+  const freshVisits = await fetchVisits();
+  setState({ visits: freshVisits });
+
+  showToast("Visit deleted");
+}
+
+async function deleteVisitById(visitId) {
+  return await safeFetch(`${SUPABASE_URL}/rest/v1/visits?id=eq.${visitId}`, {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
+}
+
 async function loadApp() {
   // DEV: URL-based reset (works on iPhone)
   if (window.location.hash === "#reset") {
@@ -847,6 +899,7 @@ async function loadApp() {
   DOM.filterUnvisited.addEventListener("change", () => {
     renderApp();
   });
+  DOM.visitHistory.addEventListener("click", handleVisitHistoryClick);
 }
 
 // ======================
