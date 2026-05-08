@@ -32,6 +32,7 @@ const state = {
   userAchievements: [],
   currentPark: null,
   currentView: "dashboard",
+  editingVisitId: null,
 };
 
 function setState(updates) {
@@ -396,16 +397,22 @@ function renderParkList(parks, visitedSet) {
 }
 
 function renderParkDetail(park) {
-  const today = new Date().toISOString().split("T")[0];
-  DOM.visitDateInput.value = today;
+  if (!state.editingVisitId && !DOM.visitDateInput.value) {
+    DOM.visitDateInput.value = new Date().toISOString().split("T")[0];
+  }
 
   DOM.parkName.textContent = park.park_name;
   DOM.parkLocation.textContent = "📍 Nearest City: " + park.nearest_city;
   DOM.parkCounty.textContent = "🗺️ County: " + park.county;
   DOM.parkDescription.textContent = park.description;
 
-  DOM.visitButton.textContent = "Add Visit";
   DOM.visitButton.disabled = false;
+
+  if (state.editingVisitId) {
+    DOM.visitButton.textContent = "Save Changes";
+  } else {
+    DOM.visitButton.textContent = "Add Visit";
+  }
 
   // ✅ FIRST: derive visits
   const visitsForPark = sortVisitsByDate(
@@ -429,11 +436,21 @@ function renderParkDetail(park) {
       ${visitsForPark
         .map(
           (v) => `
-        <div class="visit-entry">
           <div class="visit-entry">
   <div class="visit-header">
-    <span>• ${formatDate(v.visit_date)}</span>
-    <button 
+  <span>• ${formatDate(v.visit_date)}</span>
+
+  <div class="visit-actions">
+    <button
+      class="visit-edit-btn"
+      data-id="${v.id}"
+      aria-label="Edit visit"
+      title="Edit visit"
+    >
+      ✏️
+    </button>
+
+    <button
       class="visit-delete-btn"
       data-id="${v.id}"
       aria-label="Delete visit"
@@ -442,6 +459,7 @@ function renderParkDetail(park) {
       🗑️
     </button>
   </div>
+</div>
   ${v.notes ? `<div class="visit-notes">${v.notes}</div>` : ""}
 </div>
       `,
@@ -730,6 +748,60 @@ async function handleVisitClick() {
 
   const notes = DOM.visitNotes?.value.trim() || null;
 
+  const editingId = state.editingVisitId;
+
+  // ======================
+  // EDIT EXISTING VISIT
+  // ======================
+  if (editingId) {
+    // 🚀 optimistic update
+    setState({
+      visits: state.visits.map((v) =>
+        v.id === editingId
+          ? {
+              ...v,
+              visit_date: visitDate,
+              notes,
+            }
+          : v,
+      ),
+    });
+
+    const result = await updateVisit(editingId, {
+      visit_date: visitDate,
+      notes,
+    });
+
+    // 🔁 rollback on failure
+    if (!result || result.error) {
+      setState({ visits: previousVisits });
+
+      console.error("Update failed:", result?.error);
+
+      showToast("Couldn't update visit. Please try again.");
+      return;
+    }
+
+    // 🔄 sync with DB
+    const freshVisits = await fetchVisits();
+
+    setState({
+      visits: freshVisits,
+      editingVisitId: null,
+    });
+
+    // reset form
+    DOM.visitDateInput.value = "";
+    DOM.visitNotes.value = "";
+
+    showToast("Visit updated");
+
+    return;
+  }
+
+  // ======================
+  // ADD NEW VISIT
+  // ======================
   const optimisticVisit = {
     id: crypto.randomUUID(), // temp ID for UI
     park_id: parkId,
@@ -737,7 +809,7 @@ async function handleVisitClick() {
     notes,
   };
 
-  // 🚀 optimistic update (always ADD)
+  // 🚀 optimistic update
   setState({
     visits: [...state.visits, optimisticVisit],
   });
@@ -754,14 +826,16 @@ async function handleVisitClick() {
     return;
   }
 
-  // 🔄 sync with DB (simple + consistent with your pattern)
+  // 🔄 sync with DB
   const freshVisits = await fetchVisits();
-  setState({ visits: freshVisits });
 
-  // clear notes
-  if (DOM.visitNotes) {
-    DOM.visitNotes.value = "";
-  }
+  setState({
+    visits: freshVisits,
+  });
+
+  // reset form
+  DOM.visitNotes.value = "";
+  DOM.visitDateInput.value = new Date().toISOString().split("T")[0];
 
   const unlockedSomething = await checkAchievements();
 
@@ -771,10 +845,43 @@ async function handleVisitClick() {
 }
 
 async function handleVisitHistoryClick(e) {
-  const btn = e.target.closest(".visit-delete-btn");
-  if (!btn) return;
+  // ======================
+  // EDIT
+  // ======================
+  const editBtn = e.target.closest(".visit-edit-btn");
 
-  const visitId = btn.dataset.id;
+  if (editBtn) {
+    const visitId = Number(editBtn.dataset.id);
+
+    const visit = state.visits.find((v) => v.id === visitId);
+
+    if (!visit) return;
+
+    // populate form
+    DOM.visitDateInput.value = visit.visit_date;
+    DOM.visitNotes.value = visit.notes || "";
+
+    // switch mode
+    setState({
+      editingVisitId: visitId,
+    });
+
+    DOM.visitAction?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+
+    return;
+  }
+
+  // ======================
+  // DELETE
+  // ======================
+  const deleteBtn = e.target.closest(".visit-delete-btn");
+
+  if (!deleteBtn) return;
+
+  const visitId = Number(deleteBtn.dataset.id);
 
   const confirmed = confirm("Delete this visit?");
   if (!confirmed) return;
@@ -797,7 +904,7 @@ async function handleVisitHistoryClick(e) {
     return;
   }
 
-  // ✅ SUCCESS → sync with DB
+  // optional DB sync
   const freshVisits = await fetchVisits();
   setState({ visits: freshVisits });
 
@@ -809,6 +916,30 @@ async function deleteVisitById(visitId) {
     method: "DELETE",
     headers: getHeaders(),
   });
+}
+
+async function updateVisit(visitId, updates) {
+  const result = await safeFetch(
+    `${SUPABASE_URL}/rest/v1/visits?id=eq.${visitId}`,
+    {
+      method: "PATCH",
+      headers: {
+        ...getHeaders(),
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify(updates),
+    },
+  );
+
+  // detect "successful but matched nothing"
+  if (!result.error && Array.isArray(result.data) && result.data.length === 0) {
+    return {
+      data: null,
+      error: "No matching visit found",
+    };
+  }
+
+  return result;
 }
 
 async function loadApp() {
@@ -859,6 +990,7 @@ async function loadApp() {
     progressMessage: document.getElementById("progress-message"),
     visitNotes: document.getElementById("visit-notes"),
     toast: document.getElementById("toast"),
+    visitAction: document.getElementById("visit-action"),
   };
 
   DOM.filterUnvisited.checked = false;
