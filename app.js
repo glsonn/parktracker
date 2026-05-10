@@ -23,6 +23,18 @@ function getUserId() {
 const USER_ID = getUserId();
 
 // ======================
+// BRANDING
+// ======================
+
+const BRAND = {
+  appName: "ParkTracker",
+  fullName: "Wisconsin State Parks Tracker",
+
+  logo: "/public/images/logo-primary.svg",
+  icon: "/public/favicon.png",
+};
+
+// ======================
 // STATE
 // ======================
 const state = {
@@ -368,6 +380,11 @@ function renderApp() {
   if (state.currentView === "detail" && state.currentPark) {
     renderParkDetail(state.currentPark);
   }
+}
+
+function renderBranding() {
+  DOM.brandLogo.src = BRAND.logo;
+  DOM.brandTitle.textContent = BRAND.appName;
 }
 
 function renderParkList(parks, visitedSet) {
@@ -991,9 +1008,15 @@ async function loadApp() {
     visitNotes: document.getElementById("visit-notes"),
     toast: document.getElementById("toast"),
     visitAction: document.getElementById("visit-action"),
+    brandLogo: document.getElementById("brand-logo"),
+    brandTitle: document.getElementById("brand-title"),
   };
 
   DOM.filterUnvisited.checked = false;
+
+  document.title = BRAND.fullName;
+
+  renderBranding();
 
   showLandingView();
   setLoading(DOM.parksList, "Loading parks...");
