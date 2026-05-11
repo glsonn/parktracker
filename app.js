@@ -273,6 +273,8 @@ async function checkAchievements() {
 // ======================
 // HELPERS
 // ======================
+
+// Format for LONG month
 function formatDate(dateString) {
   const [year, month, day] = dateString.split("-");
 
@@ -281,6 +283,19 @@ function formatDate(dateString) {
   return date.toLocaleDateString(undefined, {
     year: "numeric",
     month: "long",
+    day: "numeric",
+  });
+}
+
+// Format for SHORT month
+function formatVisitDate(dateString) {
+  const [year, month, day] = dateString.split("-");
+
+  const date = new Date(year, month - 1, day);
+
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
     day: "numeric",
   });
 }
@@ -358,6 +373,28 @@ function getVisitedParkIds() {
   return new Set(state.visits.map((v) => v.park_id));
 }
 
+function getVisitStats(parkId) {
+  const parkVisits = state.visits.filter((visit) => visit.park_id === parkId);
+
+  const visitCount = parkVisits.length;
+
+  if (visitCount === 0) {
+    return {
+      visitCount: 0,
+      lastVisited: null,
+    };
+  }
+
+  const sortedVisits = [...parkVisits].sort(
+    (a, b) => new Date(b.visit_date) - new Date(a.visit_date),
+  );
+
+  return {
+    visitCount,
+    lastVisited: sortedVisits[0].visit_date,
+  };
+}
+
 // ======================
 // RENDER FUNCTIONS
 // ======================
@@ -392,23 +429,72 @@ function renderParkList(parks, visitedSet) {
 
   if (parks.length === 0) {
     DOM.parksList.innerHTML = `
-          <div class="empty-state">
-            <p>You’ve visited them all 🎉</p>
-            <p>Time to revisit your favorites or plan a new trip.</p>
-          </div>
-        `;
+      <div class="empty-state">
+        <p>You’ve visited them all 🎉</p>
+        <p>Time to revisit your favorites or plan a new trip.</p>
+      </div>
+    `;
     return;
   }
+
   parks.forEach((park) => {
     const li = document.createElement("li");
-    li.textContent = park.park_name;
 
-    // show check mark if visited
     const visited = visitedSet.has(park.id);
-    if (visited) li.textContent += " ✓";
+
+    li.className = visited
+      ? "park-list-item visited"
+      : "park-list-item unvisited";
 
     li.style.cursor = "pointer";
+
+    // ======================
+    // PARK NAME
+    // ======================
+    const name = document.createElement("div");
+    name.className = "park-list-name";
+    name.textContent = park.park_name;
+
+    li.appendChild(name);
+
+    // ======================
+    // VISIT META
+    // ======================
+    if (visited) {
+      const stats = getVisitStats(park.id);
+
+      const meta = document.createElement("div");
+      meta.className = "park-visit-meta";
+
+      const status = document.createElement("div");
+      status.className = "visit-status";
+
+      status.textContent = `✓ ${stats.visitCount} visit${
+        stats.visitCount === 1 ? "" : "s"
+      }`;
+
+      const lastVisited = document.createElement("div");
+      lastVisited.className = "last-visited";
+
+      lastVisited.textContent = `Last visited ${formatVisitDate(
+        stats.lastVisited,
+      )}`;
+
+      meta.appendChild(status);
+      meta.appendChild(lastVisited);
+
+      li.appendChild(meta);
+    } else {
+      const unvisited = document.createElement("div");
+
+      unvisited.className = "park-unvisited";
+      unvisited.textContent = "Not visited yet";
+
+      li.appendChild(unvisited);
+    }
+
     li.addEventListener("click", () => showParkDetail(park));
+
     DOM.parksList.appendChild(li);
   });
 }
