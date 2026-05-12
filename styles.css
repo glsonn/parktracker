@@ -460,3 +460,12 @@ button:hover {
   font-size: 0.88rem;
   color: #777;
 }
+
+.visit-summary {
+  margin-bottom: 1rem;
+}
+
+.last-visit-message {
+  color: #5a5a5a;
+  font-size: 0.92rem;
+}

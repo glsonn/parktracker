@@ -395,6 +395,60 @@ function getVisitStats(parkId) {
   };
 }
 
+function getDaysSince(dateString) {
+  const [year, month, day] = dateString.split("-");
+
+  const visitDate = new Date(year, month - 1, day);
+
+  const now = new Date();
+
+  // normalize both dates to midnight
+  visitDate.setHours(0, 0, 0, 0);
+  now.setHours(0, 0, 0, 0);
+
+  const diffMs = now - visitDate;
+
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+}
+
+function getLastVisitMessage(parkId) {
+  const stats = getVisitStats(parkId);
+
+  if (!stats.lastVisited) {
+    return null;
+  }
+
+  const days = getDaysSince(stats.lastVisited);
+
+  // very recent
+  if (days <= 7) {
+    return "You visited this park recently.";
+  }
+
+  // weeks
+  if (days < 30) {
+    return `You last visited this park ${days} days ago.`;
+  }
+
+  // months
+  if (days < 365) {
+    const months = Math.floor(days / 30);
+
+    return `You last visited this park ${months} month${
+      months === 1 ? "" : "s"
+    } ago.`;
+  }
+
+  // years
+  const years = Math.floor(days / 365);
+
+  if (years === 1) {
+    return "It’s been over a year since your last visit here.";
+  }
+
+  return `It’s been over ${years} years since your last visit here.`;
+}
+
 // ======================
 // RENDER FUNCTIONS
 // ======================
@@ -523,6 +577,7 @@ function renderParkDetail(park) {
   );
 
   const visitCount = visitsForPark.length;
+  const lastVisitMessage = getLastVisitMessage(park.id);
 
   // ✅ THEN render everything in one pass
   if (visitCount === 0) {
@@ -535,10 +590,19 @@ function renderParkDetail(park) {
     `;
   } else {
     DOM.visitHistory.innerHTML = `
-      <p><strong>${visitCount}</strong> visit${visitCount === 1 ? "" : "s"}</p>
-      ${visitsForPark
-        .map(
-          (v) => `
+  <div class="visit-summary">
+    <p><strong>${visitCount}</strong> visit${visitCount === 1 ? "" : "s"}</p>
+
+    ${
+      lastVisitMessage
+        ? `<p class="last-visit-message">${lastVisitMessage}</p>`
+        : ""
+    }
+  </div>
+
+  ${visitsForPark
+    .map(
+      (v) => `
           <div class="visit-entry">
   <div class="visit-header">
   <span>• ${formatDate(v.visit_date)}</span>
@@ -566,8 +630,8 @@ function renderParkDetail(park) {
   ${v.notes ? `<div class="visit-notes">${v.notes}</div>` : ""}
 </div>
       `,
-        )
-        .join("")}
+    )
+    .join("")}
     `;
   }
 }
