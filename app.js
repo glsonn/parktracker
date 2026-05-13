@@ -449,6 +449,49 @@ function getLastVisitMessage(parkId) {
   return `It’s been over ${years} years since your last visit here.`;
 }
 
+function getMomentumMessage() {
+  const visits = state.visits;
+
+  // ======================
+  // THIS MONTH
+  // ======================
+  const now = new Date();
+
+  const thisMonthVisits = visits.filter((visit) => {
+    const [year, month, day] = visit.visit_date.split("-");
+
+    const date = new Date(year, month - 1, day);
+
+    return (
+      date.getMonth() === now.getMonth() &&
+      date.getFullYear() === now.getFullYear()
+    );
+  });
+
+  if (thisMonthVisits.length >= 3) {
+    return `You’ve visited ${thisMonthVisits.length} parks this month.`;
+  }
+
+  // ======================
+  // NEXT MILESTONE
+  // ======================
+  const next = getNextAchievement();
+
+  if (next) {
+    const uniqueVisited = getUniqueParkCount();
+    const halfway = Math.floor(next.threshold / 2);
+
+    if (uniqueVisited >= halfway) {
+      return "You’re making steady progress toward your next milestone.";
+    }
+  }
+
+  // ======================
+  // FALLBACK
+  // ======================
+  return "Every park visit adds another story to the journey.";
+}
+
 // ======================
 // RENDER FUNCTIONS
 // ======================
@@ -461,6 +504,7 @@ function renderApp() {
   updateTotalProgress(visitedSet);
 
   if (state.currentView === "dashboard") {
+    renderMomentumMessage();
     renderRecentVisits(visitedSet);
   }
 
@@ -667,6 +711,7 @@ function showDashboardView() {
   DOM.listView.style.display = "none";
   DOM.detailView.style.display = "none";
   DOM.filterContainer.style.display = "none";
+  DOM.momentumSection.style.display = "block";
 
   renderApp();
 }
@@ -678,6 +723,7 @@ function showParksView() {
   DOM.listView.style.display = "block";
   DOM.detailView.style.display = "none";
   DOM.filterContainer.style.display = "block";
+  DOM.momentumSection.style.display = "none";
 
   renderApp();
 }
@@ -689,6 +735,7 @@ function showDetailView() {
   DOM.listView.style.display = "none";
   DOM.dashboardView.style.display = "none";
   DOM.filterContainer.style.display = "none";
+  DOM.momentumSection.style.display = "none";
 
   renderApp();
 }
@@ -877,6 +924,18 @@ function updateTotalProgress(visitedSet) {
 
   DOM.totalProgressBar.style.width = percent + "%";
   DOM.totalProgressText.textContent = `${visitedCount} of ${totalParks} parks visited (${percent}%)`;
+}
+
+function renderMomentumMessage() {
+  if (state.visits.length === 0) {
+    DOM.momentumMessage.textContent = "Your park journey is just beginning.";
+
+    return;
+  }
+
+  const message = getMomentumMessage();
+
+  DOM.momentumMessage.textContent = message;
 }
 
 // ======================
@@ -1160,6 +1219,8 @@ async function loadApp() {
     visitAction: document.getElementById("visit-action"),
     brandLogo: document.getElementById("brand-logo"),
     brandTitle: document.getElementById("brand-title"),
+    momentumSection: document.getElementById("momentum-section"),
+    momentumMessage: document.getElementById("momentum-message"),
   };
 
   DOM.filterUnvisited.checked = false;

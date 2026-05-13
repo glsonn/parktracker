@@ -469,3 +469,16 @@ button:hover {
   color: #5a5a5a;
   font-size: 0.92rem;
 }
+
+#momentum-section {
+  margin: 24px 0;
+}
+
+#momentum-section h3 {
+  margin-bottom: 0.4rem;
+}
+
+#momentum-message {
+  color: #555;
+  line-height: 1.5;
+}
