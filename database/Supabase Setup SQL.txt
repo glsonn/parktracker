@@ -1,0 +1,224 @@
+﻿Supabase-setup.SQL
+Hosting & Deployment: GitHub + Vercel auto deploy
+
+
+File Structure:
+app.js
+env.js
+index.html
+privacy.html
+styles.css
+terms.html
+README.md
+
+
+/public
+favicon.png
+public/images
+dashboard.png
+details.png
+logo-primary.svg
+parks.png
+
+
+-- IMPORTANT:
+-- ParkTracker currently uses anonymous users with localStorage UUIDs.
+-- Policies and grants are designed around this architecture.
+
+
+-- ======================
+-- PARKTRACKER DATABASE SETUP
+-- ======================
+
+
+-- Created: 2026-05-13
+
+
+-- ======================
+-- GRANTS
+-- ======================
+
+
+grant select on public.parks to anon;
+grant select on public.parks to authenticated;
+
+
+grant select on public.achievements to anon;
+grant select on public.achievements to authenticated;
+
+
+grant select, insert, update, delete
+on public.visits
+to anon;
+
+
+grant select, insert
+on public.user_achievements
+to anon;
+
+
+-- ======================
+-- RLS
+-- ======================
+
+
+alter table public.visits
+enable row level security;
+
+
+alter table public.user_achievements
+enable row level security;
+
+
+
+
+-- ======================
+-- POLICIES
+-- ======================
+
+
+VISITS
+RLS Policies: Insert, Select, Delete, Update
+
+
+INSERT
+alter policy "Add Visit"
+on "public"."visits"
+to public
+with check (
+  true
+);
+
+
+SELECT
+alter policy "Read Visits"
+on "public"."visits"
+to public
+using (
+  true
+);
+
+
+DELETE
+alter policy "Remove Visit"
+on "public"."visits"
+to public
+using (
+  true
+);
+
+
+UPDATE
+alter policy "Users can update their own visits"
+on "public"."visits"
+to public
+using (
+  (user_id IS NOT NULL)
+) with check (
+  (user_id IS NOT NULL)
+);
+
+
+USER_ACHIEVEMENTS
+RLS Policies: Insert, Select
+
+
+INSERT
+alter policy "Allow user to insert their achievements"
+on "public"."user_achievements"
+to public
+with check (
+  true
+);
+
+
+SELECT
+alter policy "Allow users to select achievements"
+on "public"."user_achievements"
+to public
+using (
+7
+  true
+);
+
+
+-- ======================
+-- TABLES
+-- ======================
+PARKS (no RLS)
+CREATE PARKS TABLE
+create table public.parks (
+ id bigint generated always as identity not null,
+ park_name text not null,
+ nearest_city text null,
+ county text null,
+ latitude numeric(9, 6) null,
+ longitude numeric(9, 6) null,
+ year_established integer null,
+ dnr_url text null,
+ description text null,
+ state character(2) null,
+ constraint parks_pkey primary key (id)
+) TABLESPACE pg_default;
+
+
+create index IF not exists idx_parks_name on public.parks using btree (park_name) TABLESPACE pg_default;
+VISITS
+CREATE VISITS TABLE
+create table public.visits (
+ id bigint generated always as identity not null,
+ user_id uuid null,
+ park_id bigint null,
+ visit_date date not null,
+ notes text null,
+ created_at timestamp with time zone null default now(),
+ constraint visits_pkey primary key (id),
+ constraint visits_park_id_fkey foreign KEY (park_id) references parks (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+
+create index IF not exists idx_visits_user_id on public.visits using btree (user_id) TABLESPACE pg_default;
+
+
+create index IF not exists idx_visits_park_id on public.visits using btree (park_id) TABLESPACE pg_default;
+USER_ACHIEVEMENTS
+CREATE USER_ACHIEVEMENTS TABLE
+create table public.user_achievements (
+ id bigint generated always as identity not null,
+ user_id uuid null,
+ achievement_id bigint null,
+ date_unlocked timestamp with time zone null default now(),
+ unlocked_at timestamp without time zone null,
+ constraint user_achievements_pkey primary key (id),
+ constraint user_achievements_achievement_id_fkey foreign KEY (achievement_id) references achievements (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+
+create index IF not exists idx_user_achievements_user_id on public.user_achievements using btree (user_id) TABLESPACE pg_default;
+
+
+create index IF not exists idx_user_achievements_achievement_id on public.user_achievements using btree (achievement_id) TABLESPACE pg_default;
+ACHIEVEMENTS (no RLS)
+CREATE ACHIEVEMENTS TABLE
+create table public.achievements (
+ id bigint generated always as identity not null,
+ title text not null,
+ description text null,
+ threshold integer not null,
+ created_at timestamp with time zone null default now(),
+ constraint achievements_pkey primary key (id)
+) TABLESPACE pg_default;
+PHOTOS (empty for now)
+CREATE PHOTOS TABLE
+create table public.photos (
+ id bigint generated always as identity not null,
+ visit_id bigint null,
+ photo_url text not null,
+ caption text null,
+ uploaded_at timestamp with time zone null default now(),
+ constraint photos_pkey primary key (id),
+ constraint photos_visit_id_fkey foreign KEY (visit_id) references visits (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+
+create index IF not exists idx_photos_visit_id on public.photos using btree (visit_id) TABLESPACE pg_default;
