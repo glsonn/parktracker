@@ -45,6 +45,19 @@ const state = {
   currentPark: null,
   currentView: "dashboard",
   editingVisitId: null,
+
+  loading: {
+    initialData: false,
+    savingVisit: false,
+  },
+
+  errors: {
+    global: null,
+  },
+
+  network: {
+    online: navigator.onLine,
+  },
 };
 
 function setState(updates) {
@@ -68,7 +81,14 @@ async function safeFetch(endpoint, options = {}) {
     const text = await res.text();
 
     if (!res.ok) {
-      return { data: null, error: text || `Request failed: ${res.status}` };
+      return {
+        data: null,
+        error: {
+          type: "server",
+          status: res.status,
+          message: text || `Request failed: ${res.status}`,
+        },
+      };
     }
 
     const data = text ? JSON.parse(text) : null;
@@ -76,7 +96,13 @@ async function safeFetch(endpoint, options = {}) {
     return { data, error: null };
   } catch (err) {
     console.error("Fetch error:", err);
-    return { data: null, error: err.message };
+    return {
+      data: null,
+      error: {
+        type: "network",
+        message: err.message,
+      },
+    };
   }
 }
 
@@ -492,12 +518,35 @@ function getMomentumMessage() {
   return "Every park visit adds another story to the journey.";
 }
 
+function setGlobalError(message, retry = null) {
+  setState({
+    errors: {
+      ...state.errors,
+      global: {
+        message,
+        retry,
+      },
+    },
+  });
+}
+
+function clearGlobalError() {
+  setState({
+    errors: {
+      ...state.errors,
+      global: null,
+    },
+  });
+}
+
 // ======================
 // RENDER FUNCTIONS
 // ======================
 function renderApp() {
   const visitedSet = getVisitedParkIds();
 
+  renderGlobalError();
+  renderNetworkStatus();
   renderVisitCounter(visitedSet.size);
   renderNextAchievement(visitedSet);
   renderAchievements(null, visitedSet);
@@ -607,9 +656,11 @@ function renderParkDetail(park) {
   DOM.parkCounty.textContent = "🗺️ County: " + park.county;
   DOM.parkDescription.textContent = park.description;
 
-  DOM.visitButton.disabled = false;
+  DOM.visitButton.disabled = state.loading.savingVisit;
 
-  if (state.editingVisitId) {
+  if (state.loading.savingVisit) {
+    DOM.visitButton.textContent = "Saving...";
+  } else if (state.editingVisitId) {
     DOM.visitButton.textContent = "Save Changes";
   } else {
     DOM.visitButton.textContent = "Add Visit";
@@ -938,6 +989,32 @@ function renderMomentumMessage() {
   DOM.momentumMessage.textContent = message;
 }
 
+function renderNetworkStatus() {
+  if (state.network.online) {
+    DOM.offlineBanner.classList.add("hidden");
+  } else {
+    DOM.offlineBanner.classList.remove("hidden");
+  }
+}
+
+function renderGlobalError() {
+  const error = state.errors.global;
+
+  if (!error) {
+    DOM.globalError.classList.add("hidden");
+    DOM.globalError.innerHTML = "";
+    return;
+  }
+
+  DOM.globalError.classList.remove("hidden");
+
+  DOM.globalError.innerHTML = `
+    <div class="global-error-content">
+      <span>${error.message}</span>
+    </div>
+  `;
+}
+
 // ======================
 // CONTROLLER FUNCTIONS
 // ======================
@@ -991,6 +1068,11 @@ async function handleVisitClick() {
             }
           : v,
       ),
+
+      loading: {
+        ...state.loading,
+        savingVisit: true,
+      },
     });
 
     const result = await updateVisit(editingId, {
@@ -1000,11 +1082,24 @@ async function handleVisitClick() {
 
     // 🔁 rollback on failure
     if (!result || result.error) {
-      setState({ visits: previousVisits });
+      setState({
+        visits: previousVisits,
+        editingVisitId: null,
+
+        loading: {
+          ...state.loading,
+          savingVisit: false,
+        },
+      });
+
+      DOM.visitDateInput.value = "";
+      DOM.visitNotes.value = "";
 
       console.error("Update failed:", result?.error);
 
-      showToast("Couldn't update visit. Please try again.");
+      setGlobalError("Couldn't sync your visit.", handleVisitClick);
+
+      showToast("Couldn't sync visit.");
       return;
     }
 
@@ -1014,12 +1109,18 @@ async function handleVisitClick() {
     setState({
       visits: freshVisits,
       editingVisitId: null,
+
+      loading: {
+        ...state.loading,
+        savingVisit: false,
+      },
     });
 
     // reset form
     DOM.visitDateInput.value = "";
     DOM.visitNotes.value = "";
 
+    clearGlobalError();
     showToast("Visit updated");
 
     return;
@@ -1038,17 +1139,34 @@ async function handleVisitClick() {
   // 🚀 optimistic update
   setState({
     visits: [...state.visits, optimisticVisit],
+
+    loading: {
+      ...state.loading,
+      savingVisit: true,
+    },
   });
 
   const result = await saveVisit(parkId, visitDate, notes);
 
   // 🔁 rollback on failure
   if (!result || result.error) {
-    setState({ visits: previousVisits });
+    setState({
+      visits: previousVisits,
+
+      loading: {
+        ...state.loading,
+        savingVisit: false,
+      },
+    });
+
+    DOM.visitNotes.value = "";
+    DOM.visitDateInput.value = new Date().toISOString().split("T")[0];
 
     console.error("Save visit failed:", result?.error);
 
-    showToast("Couldn't save visit. Please try again.");
+    setGlobalError("Couldn't sync your visit.", handleVisitClick);
+
+    showToast("Couldn't sync visit.");
     return;
   }
 
@@ -1057,12 +1175,18 @@ async function handleVisitClick() {
 
   setState({
     visits: freshVisits,
+
+    loading: {
+      ...state.loading,
+      savingVisit: false,
+    },
   });
 
   // reset form
   DOM.visitNotes.value = "";
   DOM.visitDateInput.value = new Date().toISOString().split("T")[0];
 
+  clearGlobalError();
   const unlockedSomething = await checkAchievements();
 
   if (!unlockedSomething) {
@@ -1221,6 +1345,8 @@ async function loadApp() {
     brandTitle: document.getElementById("brand-title"),
     momentumSection: document.getElementById("momentum-section"),
     momentumMessage: document.getElementById("momentum-message"),
+    offlineBanner: document.getElementById("offline-banner"),
+    globalError: document.getElementById("global-error"),
   };
 
   DOM.filterUnvisited.checked = false;
@@ -1236,10 +1362,12 @@ async function loadApp() {
   // ======================
   // FETCH DATA
   // ======================
-  const parks = await fetchParks();
-  const visits = await fetchVisits();
-  const achievements = await fetchAchievements();
-  const userAchievements = await fetchUserAchievements();
+  const [parks, visits, achievements, userAchievements] = await Promise.all([
+    fetchParks(),
+    fetchVisits(),
+    fetchAchievements(),
+    fetchUserAchievements(),
+  ]);
 
   setState({
     parks,
@@ -1266,6 +1394,22 @@ async function loadApp() {
     renderApp();
   });
   DOM.visitHistory.addEventListener("click", handleVisitHistoryClick);
+
+  window.addEventListener("online", () => {
+    setState({
+      network: { online: true },
+    });
+
+    showToast("Back online");
+  });
+
+  window.addEventListener("offline", () => {
+    setState({
+      network: { online: false },
+    });
+
+    showToast("You're offline");
+  });
 }
 
 // ======================

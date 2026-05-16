@@ -482,3 +482,16 @@ button:hover {
   color: #555;
   line-height: 1.5;
 }
+
+.global-error {
+  margin: 1rem 0;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  background: #fef3c7;
+  color: #78350f;
+  font-size: 0.95rem;
+}
+
+.global-error.hidden {
+  display: none;
+}
