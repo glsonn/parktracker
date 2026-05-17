@@ -518,6 +518,149 @@ function getMomentumMessage() {
   return "Every park visit adds another story to the journey.";
 }
 
+function getYearsAgo(dateString) {
+  const [year, month, day] = dateString.split("-").map(Number);
+
+  const today = new Date();
+
+  let yearsAgo = today.getFullYear() - year;
+
+  const hasNotReachedAnniversary =
+    today.getMonth() + 1 < month ||
+    (today.getMonth() + 1 === month && today.getDate() < day);
+
+  if (hasNotReachedAnniversary) {
+    yearsAgo--;
+  }
+
+  return yearsAgo;
+}
+
+function getOnThisDayMemories() {
+  const today = new Date();
+
+  const todayMonth = today.getMonth() + 1;
+  const todayDay = today.getDate();
+
+  const visitsByPark = {};
+
+  // ======================
+  // GROUP VALID VISITS
+  // ======================
+  for (const visit of state.visits) {
+    if (!visit?.visit_date || !visit?.park_id) {
+      continue;
+    }
+
+    if (!visitsByPark[visit.park_id]) {
+      visitsByPark[visit.park_id] = [];
+    }
+
+    visitsByPark[visit.park_id].push(visit);
+  }
+
+  const memories = [];
+
+  // ======================
+  // FIRST VISIT MEMORIES
+  // ======================
+  for (const parkId in visitsByPark) {
+    const visits = [...visitsByPark[parkId]].sort(
+      (a, b) => new Date(a.visit_date) - new Date(b.visit_date),
+    );
+
+    const firstVisit = visits[0];
+
+    if (!firstVisit?.visit_date) {
+      continue;
+    }
+
+    const parts = firstVisit.visit_date.split("-");
+
+    if (parts.length !== 3) {
+      continue;
+    }
+
+    const [year, month, day] = parts.map(Number);
+
+    // exact anniversary only
+    if (month !== todayMonth || day !== todayDay) {
+      continue;
+    }
+
+    const yearsAgo = getYearsAgo(firstVisit.visit_date);
+
+    if (yearsAgo < 1) {
+      continue;
+    }
+
+    const park = state.parks.find((p) => Number(p.id) === Number(parkId));
+
+    if (!park?.park_name) {
+      continue;
+    }
+
+    memories.push({
+      type: "first_visit",
+      yearsAgo,
+      text:
+        yearsAgo === 1
+          ? `You first visited ${park.park_name} 1 year ago today.`
+          : `You first visited ${park.park_name} ${yearsAgo} years ago today.`,
+    });
+  }
+
+  // ======================
+  // FALLBACK MEMORIES
+  // ======================
+  if (memories.length === 0) {
+    for (const visit of state.visits) {
+      if (!visit?.visit_date) {
+        continue;
+      }
+
+      const parts = visit.visit_date.split("-");
+
+      if (parts.length !== 3) {
+        continue;
+      }
+
+      const [year, month, day] = parts.map(Number);
+
+      if (month !== todayMonth || day !== todayDay) {
+        continue;
+      }
+
+      const yearsAgo = getYearsAgo(firstVisit.visit_date);
+
+      if (yearsAgo < 1) {
+        continue;
+      }
+
+      const park = state.parks.find(
+        (p) => Number(p.id) === Number(visit.park_id),
+      );
+
+      if (!park?.park_name) {
+        continue;
+      }
+
+      memories.push({
+        type: "visit",
+        yearsAgo,
+        text:
+          yearsAgo === 1
+            ? `1 year ago today you visited ${park.park_name}.`
+            : `${yearsAgo} years ago today you visited ${park.park_name}.`,
+      });
+    }
+  }
+
+  memories.sort((a, b) => b.yearsAgo - a.yearsAgo);
+
+  return memories.slice(0, 2);
+}
+
 function setGlobalError(message, retry = null) {
   setState({
     errors: {
@@ -554,6 +697,7 @@ function renderApp() {
 
   if (state.currentView === "dashboard") {
     renderMomentumMessage();
+    renderMemoryMoments();
     renderRecentVisits(visitedSet);
   }
 
@@ -945,7 +1089,9 @@ function renderRecentVisits(visitedSet) {
   const recent = visits.slice(0, 5);
 
   recent.forEach((visit) => {
-    const park = state.parks.find((p) => p.id === visit.park_id);
+    const park = state.parks.find(
+      (p) => Number(p.id) === Number(visit.park_id),
+    );
 
     const div = document.createElement("div");
     div.className = "recent-visit";
@@ -987,6 +1133,35 @@ function renderMomentumMessage() {
   const message = getMomentumMessage();
 
   DOM.momentumMessage.textContent = message;
+}
+
+function renderMemoryMoments() {
+  const memories = getOnThisDayMemories();
+
+  const validMemories = memories.filter(
+    (memory) =>
+      memory &&
+      typeof memory.text === "string" &&
+      memory.text.trim().length > 0,
+  );
+
+  if (validMemories.length === 0) {
+    DOM.memorySection.classList.add("hidden");
+    DOM.memoryMoments.innerHTML = "";
+    return;
+  }
+
+  DOM.memorySection.classList.remove("hidden");
+
+  DOM.memoryMoments.innerHTML = validMemories
+    .map(
+      (memory) => `
+        <div class="memory-moment">
+          ${memory.text}
+        </div>
+      `,
+    )
+    .join("");
 }
 
 function renderNetworkStatus() {
@@ -1345,6 +1520,8 @@ async function loadApp() {
     brandTitle: document.getElementById("brand-title"),
     momentumSection: document.getElementById("momentum-section"),
     momentumMessage: document.getElementById("momentum-message"),
+    memorySection: document.getElementById("memory-section"),
+    memoryMoments: document.getElementById("memory-moments"),
     offlineBanner: document.getElementById("offline-banner"),
     globalError: document.getElementById("global-error"),
   };

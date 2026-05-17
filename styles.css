@@ -495,3 +495,27 @@ button:hover {
 .global-error.hidden {
   display: none;
 }
+
+.memory-section {
+  margin: 24px 0;
+  padding: 1rem;
+  background: #f7f6f2;
+  border-radius: 12px;
+  border: 1px solid #e7e2d8;
+}
+
+.memory-section h3 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  color: #2f3e36;
+}
+
+.memory-moment {
+  color: #555;
+  line-height: 1.6;
+  padding: 0.5rem 0;
+}
+
+.memory-moment + .memory-moment {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
