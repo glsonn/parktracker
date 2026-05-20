@@ -518,6 +518,170 @@ function getMomentumMessage() {
   return "Every park visit adds another story to the journey.";
 }
 
+function getRevisitedParks() {
+  const counts = {};
+
+  for (const visit of state.visits) {
+    counts[visit.park_id] = (counts[visit.park_id] || 0) + 1;
+  }
+
+  return Object.entries(counts)
+    .filter(([, count]) => count > 1)
+    .map(([parkId, count]) => ({
+      parkId: Number(parkId),
+      count,
+    }));
+}
+
+function getMostVisitedPark() {
+  const revisited = getRevisitedParks();
+
+  if (revisited.length === 0) {
+    return null;
+  }
+
+  revisited.sort((a, b) => b.count - a.count);
+
+  const top = revisited[0];
+
+  const park = state.parks.find((p) => p.id === top.parkId);
+
+  if (!park) {
+    return null;
+  }
+
+  return {
+    parkName: park.park_name,
+    count: top.count,
+  };
+}
+
+function getMostActiveMonth() {
+  if (state.visits.length < 3) {
+    return null;
+  }
+
+  const monthCounts = {};
+
+  for (const visit of state.visits) {
+    const [year, month] = visit.visit_date.split("-");
+
+    monthCounts[month] = (monthCounts[month] || 0) + 1;
+  }
+
+  let topMonth = null;
+  let topCount = 0;
+
+  for (const month in monthCounts) {
+    if (monthCounts[month] > topCount) {
+      topMonth = Number(month);
+      topCount = monthCounts[month];
+    }
+  }
+
+  if (!topMonth) {
+    return null;
+  }
+
+  const monthName = new Date(2025, topMonth - 1, 1).toLocaleDateString(
+    undefined,
+    {
+      month: "long",
+    },
+  );
+
+  return monthName;
+}
+
+function getTrackingYears() {
+  if (state.visits.length === 0) {
+    return null;
+  }
+
+  const sorted = [...state.visits].sort(
+    (a, b) => new Date(a.visit_date) - new Date(b.visit_date),
+  );
+
+  const firstVisit = sorted[0];
+
+  return getYearsAgo(firstVisit.visit_date);
+}
+
+function getReflectionMessage() {
+  if (state.visits.length === 0) {
+    return null;
+  }
+
+  const reflections = [];
+
+  // ======================
+  // REVISITED PARKS
+  // ======================
+  const revisited = getRevisitedParks();
+
+  if (revisited.length > 0) {
+    reflections.push(
+      `You’ve revisited ${revisited.length} park${
+        revisited.length === 1 ? "" : "s"
+      } more than once.`,
+    );
+  }
+
+  // ======================
+  // MOST VISITED PARK
+  // ======================
+  const favorite = getMostVisitedPark();
+
+  if (favorite) {
+    reflections.push(`Your most revisited park is ${favorite.parkName}.`);
+  }
+
+  // ======================
+  // SEASONAL PATTERN
+  // ======================
+  const activeMonth = getMostActiveMonth();
+
+  if (activeMonth) {
+    reflections.push(`Most of your visits happen in ${activeMonth}.`);
+  }
+
+  // ======================
+  // LONG-TERM TRACKING
+  // ======================
+  const years = getTrackingYears();
+
+  if (years && years >= 1) {
+    reflections.push(
+      years === 1
+        ? "Your park history now spans more than a year."
+        : `Your park history now spans ${years} years.`,
+    );
+  }
+
+  // ======================
+  // FALLBACK
+  // ======================
+  if (reflections.length === 0) {
+    return "Every visit becomes part of the story over time.";
+  }
+
+  // Randomize the reflections a bit by using day of year as index
+  const today = new Date();
+  
+  const startOfYear = new Date(today.getFullYear(), 0, 0);
+
+  const diff =
+    today -
+    startOfYear +
+    (startOfYear.getTimezoneOffset() - today.getTimezoneOffset()) * 60 * 1000;
+
+  const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+  const index = dayOfYear % reflections.length;
+
+  return reflections[index];
+}
+
 function getYearsAgo(dateString) {
   const [year, month, day] = dateString.split("-").map(Number);
 
@@ -698,6 +862,7 @@ function renderApp() {
   if (state.currentView === "dashboard") {
     renderMomentumMessage();
     renderMemoryMoments();
+    renderReflection();
     renderRecentVisits(visitedSet);
   }
 
@@ -1135,6 +1300,19 @@ function renderMomentumMessage() {
   DOM.momentumMessage.textContent = message;
 }
 
+function renderReflection() {
+  const message = getReflectionMessage();
+
+  if (!message) {
+    DOM.reflectionSection.classList.add("hidden");
+    return;
+  }
+
+  DOM.reflectionSection.classList.remove("hidden");
+
+  DOM.reflectionMessage.textContent = message;
+}
+
 function renderMemoryMoments() {
   const memories = getOnThisDayMemories();
 
@@ -1522,6 +1700,8 @@ async function loadApp() {
     momentumMessage: document.getElementById("momentum-message"),
     memorySection: document.getElementById("memory-section"),
     memoryMoments: document.getElementById("memory-moments"),
+    reflectionSection: document.getElementById("reflection-section"),
+    reflectionMessage: document.getElementById("reflection-message"),
     offlineBanner: document.getElementById("offline-banner"),
     globalError: document.getElementById("global-error"),
   };

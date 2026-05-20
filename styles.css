@@ -519,3 +519,22 @@ button:hover {
 .memory-moment + .memory-moment {
   border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
+
+.reflection-section {
+  margin: 24px 0;
+  padding: 1rem;
+  background: #f4f7f4;
+  border-radius: 12px;
+  border: 1px solid #dde6dd;
+}
+
+.reflection-section h3 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  color: #2f3e36;
+}
+
+.reflection-message {
+  color: #4b5563;
+  line-height: 1.6;
+}
