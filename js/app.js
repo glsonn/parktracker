@@ -1,3 +1,10 @@
+import {
+  formatDate,
+  formatVisitDate,
+  sortVisitsByDate,
+  getDaysSince,
+  getYearsAgo,
+} from "./utils/dates.js";
 /* eslint-env browser */
 
 // ======================
@@ -300,38 +307,6 @@ async function checkAchievements() {
 // HELPERS
 // ======================
 
-// Format for LONG month
-function formatDate(dateString) {
-  const [year, month, day] = dateString.split("-");
-
-  const date = new Date(year, month - 1, day); // local time, no shift
-
-  return date.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
-
-// Format for SHORT month
-function formatVisitDate(dateString) {
-  const [year, month, day] = dateString.split("-");
-
-  const date = new Date(year, month - 1, day);
-
-  return date.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function sortVisitsByDate(visits) {
-  return [...visits].sort(
-    (a, b) => new Date(b.visit_date) - new Date(a.visit_date),
-  );
-}
-
 function setLoading(element, message) {
   element.innerHTML = `<p class="loading">${message}</p>`;
 }
@@ -419,22 +394,6 @@ function getVisitStats(parkId) {
     visitCount,
     lastVisited: sortedVisits[0].visit_date,
   };
-}
-
-function getDaysSince(dateString) {
-  const [year, month, day] = dateString.split("-");
-
-  const visitDate = new Date(year, month - 1, day);
-
-  const now = new Date();
-
-  // normalize both dates to midnight
-  visitDate.setHours(0, 0, 0, 0);
-  now.setHours(0, 0, 0, 0);
-
-  const diffMs = now - visitDate;
-
-  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
 }
 
 function getLastVisitMessage(parkId) {
@@ -667,7 +626,7 @@ function getReflectionMessage() {
 
   // Randomize the reflections a bit by using day of year as index
   const today = new Date();
-  
+
   const startOfYear = new Date(today.getFullYear(), 0, 0);
 
   const diff =
@@ -680,24 +639,6 @@ function getReflectionMessage() {
   const index = dayOfYear % reflections.length;
 
   return reflections[index];
-}
-
-function getYearsAgo(dateString) {
-  const [year, month, day] = dateString.split("-").map(Number);
-
-  const today = new Date();
-
-  let yearsAgo = today.getFullYear() - year;
-
-  const hasNotReachedAnniversary =
-    today.getMonth() + 1 < month ||
-    (today.getMonth() + 1 === month && today.getDate() < day);
-
-  if (hasNotReachedAnniversary) {
-    yearsAgo--;
-  }
-
-  return yearsAgo;
 }
 
 function getOnThisDayMemories() {
