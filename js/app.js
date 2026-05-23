@@ -5,15 +5,21 @@ import {
   getDaysSince,
   getYearsAgo,
 } from "./utils/dates.js";
+
+import {
+  fetchParks,
+  fetchVisits,
+  fetchAchievements,
+  fetchUserAchievements,
+  saveVisit,
+  updateVisit,
+  deleteVisitById,
+} from "./api/api.js";
 /* eslint-env browser */
 
 // ======================
 // CONFIG
 // ======================
-
-// Load Supabase credentials from env.js
-const SUPABASE_URL = window.ENV?.SUPABASE_URL;
-const SUPABASE_ANON_KEY = window.ENV?.SUPABASE_ANON_KEY;
 
 // Persistent user ID
 const USER_ID_KEY = "wi_state_parks_user_id";
@@ -76,123 +82,6 @@ function setState(updates) {
 // DOM CACHE (assigned in loadApp)
 // ======================
 let DOM = {};
-
-// ======================
-// DATA FUNCTIONS
-// ======================
-// Generic helper for Supabase REST API calls
-async function safeFetch(endpoint, options = {}) {
-  try {
-    const res = await fetch(endpoint, options);
-
-    const text = await res.text();
-
-    if (!res.ok) {
-      return {
-        data: null,
-        error: {
-          type: "server",
-          status: res.status,
-          message: text || `Request failed: ${res.status}`,
-        },
-      };
-    }
-
-    const data = text ? JSON.parse(text) : null;
-
-    return { data, error: null };
-  } catch (err) {
-    console.error("Fetch error:", err);
-    return {
-      data: null,
-      error: {
-        type: "network",
-        message: err.message,
-      },
-    };
-  }
-}
-
-function getHeaders(additionalHeaders = {}) {
-  return {
-    apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    "Content-Type": "application/json",
-    ...additionalHeaders,
-  };
-}
-
-async function fetchParks() {
-  const { data, error } = await safeFetch(
-    `${SUPABASE_URL}/rest/v1/parks?select=*`,
-    { headers: getHeaders() },
-  );
-
-  if (error) {
-    console.error("fetchParks failed:", error);
-    return [];
-  }
-
-  return data || [];
-}
-
-async function fetchVisits() {
-  const { data, error } = await safeFetch(
-    `${SUPABASE_URL}/rest/v1/visits?user_id=eq.${USER_ID}&select=*`,
-    { headers: getHeaders() },
-  );
-
-  if (error) {
-    console.error("fetchVisits failed:", error);
-    return [];
-  }
-
-  return data || [];
-}
-
-async function fetchAchievements() {
-  const { data, error } = await safeFetch(
-    `${SUPABASE_URL}/rest/v1/achievements?select=*`,
-    { headers: getHeaders() },
-  );
-
-  if (error) {
-    console.error("fetchAchievements failed:", error);
-    return [];
-  }
-
-  return data || [];
-}
-
-async function fetchUserAchievements() {
-  const { data, error } = await safeFetch(
-    `${SUPABASE_URL}/rest/v1/user_achievements?user_id=eq.${USER_ID}&select=*`,
-    { headers: getHeaders() },
-  );
-
-  if (error) {
-    console.error("fetchUserAchievements failed:", error);
-    return [];
-  }
-
-  return data || [];
-}
-
-async function saveVisit(parkId, visitDate, notes) {
-  return await safeFetch(`${SUPABASE_URL}/rest/v1/visits`, {
-    method: "POST",
-    headers: {
-      ...getHeaders(),
-      Prefer: "return=representation",
-    },
-    body: JSON.stringify({
-      user_id: USER_ID,
-      park_id: parkId,
-      visit_date: visitDate,
-      notes: notes || null,
-    }),
-  });
-}
 
 // ======================
 // RESET for DEV only
@@ -736,7 +625,7 @@ function getOnThisDayMemories() {
         continue;
       }
 
-      const yearsAgo = getYearsAgo(firstVisit.visit_date);
+      const yearsAgo = getYearsAgo(visit.visit_date);
 
       if (yearsAgo < 1) {
         continue;
@@ -1398,7 +1287,7 @@ async function handleVisitClick() {
     }
 
     // 🔄 sync with DB
-    const freshVisits = await fetchVisits();
+    const freshVisits = await fetchVisits(USER_ID);
 
     setState({
       visits: freshVisits,
@@ -1440,7 +1329,7 @@ async function handleVisitClick() {
     },
   });
 
-  const result = await saveVisit(parkId, visitDate, notes);
+  const result = await saveVisit(USER_ID, parkId, visitDate, notes);
 
   // 🔁 rollback on failure
   if (!result || result.error) {
@@ -1465,7 +1354,7 @@ async function handleVisitClick() {
   }
 
   // 🔄 sync with DB
-  const freshVisits = await fetchVisits();
+  const freshVisits = await fetchVisits(USER_ID);
 
   setState({
     visits: freshVisits,
@@ -1549,41 +1438,10 @@ async function handleVisitHistoryClick(e) {
   }
 
   // optional DB sync
-  const freshVisits = await fetchVisits();
+  const freshVisits = await fetchVisits(USER_ID);
   setState({ visits: freshVisits });
 
   showToast("Visit deleted");
-}
-
-async function deleteVisitById(visitId) {
-  return await safeFetch(`${SUPABASE_URL}/rest/v1/visits?id=eq.${visitId}`, {
-    method: "DELETE",
-    headers: getHeaders(),
-  });
-}
-
-async function updateVisit(visitId, updates) {
-  const result = await safeFetch(
-    `${SUPABASE_URL}/rest/v1/visits?id=eq.${visitId}`,
-    {
-      method: "PATCH",
-      headers: {
-        ...getHeaders(),
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(updates),
-    },
-  );
-
-  // detect "successful but matched nothing"
-  if (!result.error && Array.isArray(result.data) && result.data.length === 0) {
-    return {
-      data: null,
-      error: "No matching visit found",
-    };
-  }
-
-  return result;
 }
 
 async function loadApp() {
@@ -1662,9 +1520,9 @@ async function loadApp() {
   // ======================
   const [parks, visits, achievements, userAchievements] = await Promise.all([
     fetchParks(),
-    fetchVisits(),
+    fetchVisits(USER_ID),
     fetchAchievements(),
-    fetchUserAchievements(),
+    fetchUserAchievements(USER_ID),
   ]);
 
   setState({
