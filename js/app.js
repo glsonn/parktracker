@@ -25,6 +25,13 @@ import {
   getOnThisDayMemories,
   getMomentumMessage,
 } from "./utils/reflections.js";
+
+import {
+  renderReflection,
+  renderMemoryMoments,
+  renderMomentumMessage,
+  renderRecentVisits,
+} from "./render/dashboard.js";
 /* eslint-env browser */
 
 // ======================
@@ -368,10 +375,18 @@ function renderApp() {
   updateTotalProgress(visitedSet);
 
   if (state.currentView === "dashboard") {
-    renderMomentumMessage();
-    renderMemoryMoments();
-    renderReflection();
-    renderRecentVisits(visitedSet);
+    renderMomentumMessage(state, DOM);
+    renderMemoryMoments(state, DOM);
+    renderReflection(state, DOM);
+    renderRecentVisits(
+      state,
+      DOM,
+      visitedSet,
+      showParkDetail,
+      getVisitedParkIds,
+      sortVisitsByDate,
+      formatDate,
+    );
   }
 
   if (state.currentView === "parks") {
@@ -742,47 +757,6 @@ function renderNextAchievement(visitedSet) {
   DOM.progressMessage.textContent = getProgressMessage(visitCount, next);
 }
 
-function renderRecentVisits(visitedSet) {
-  visitedSet = visitedSet || getVisitedParkIds();
-
-  const visits = sortVisitsByDate(state.visits);
-
-  DOM.recentVisits.innerHTML = "";
-
-  if (visits.length === 0) {
-    DOM.recentVisits.innerHTML = `
-          <div class="empty-state">
-            <p>No visits yet.</p>
-            <p>Start exploring your first park 🌲</p>
-          </div>
-        `;
-    return;
-  }
-
-  const recent = visits.slice(0, 5);
-
-  recent.forEach((visit) => {
-    const park = state.parks.find(
-      (p) => Number(p.id) === Number(visit.park_id),
-    );
-
-    const div = document.createElement("div");
-    div.className = "recent-visit";
-    div.style.cursor = "pointer";
-
-    div.innerHTML = `
-            <strong>${park.park_name}</strong><br>
-            ${formatDate(visit.visit_date)}
-          `;
-
-    div.addEventListener("click", () => {
-      showParkDetail(park);
-    });
-
-    DOM.recentVisits.appendChild(div);
-  });
-}
-
 function updateTotalProgress(visitedSet) {
   visitedSet = visitedSet || getVisitedParkIds();
   const totalParks = state.parks.length;
@@ -794,60 +768,6 @@ function updateTotalProgress(visitedSet) {
 
   DOM.totalProgressBar.style.width = percent + "%";
   DOM.totalProgressText.textContent = `${visitedCount} of ${totalParks} parks visited (${percent}%)`;
-}
-
-function renderMomentumMessage() {
-  if (state.visits.length === 0) {
-    DOM.momentumMessage.textContent = "Your park journey is just beginning.";
-
-    return;
-  }
-
-  const momentum = getMomentumMessage(state.visits);
-
-  DOM.momentumMessage.textContent = momentum;
-}
-
-function renderReflection() {
-  const reflection = getReflectionMessage(state.visits, state.parks);
-
-  if (!reflection) {
-    DOM.reflectionSection.classList.add("hidden");
-    return;
-  }
-
-  DOM.reflectionSection.classList.remove("hidden");
-
-  DOM.reflectionMessage.textContent = reflection;
-}
-
-function renderMemoryMoments() {
-  const memories = getOnThisDayMemories(state.visits, state.parks);
-
-  const validMemories = memories.filter(
-    (memory) =>
-      memory &&
-      typeof memory.text === "string" &&
-      memory.text.trim().length > 0,
-  );
-
-  if (validMemories.length === 0) {
-    DOM.memorySection.classList.add("hidden");
-    DOM.memoryMoments.innerHTML = "";
-    return;
-  }
-
-  DOM.memorySection.classList.remove("hidden");
-
-  DOM.memoryMoments.innerHTML = validMemories
-    .map(
-      (memory) => `
-        <div class="memory-moment">
-          ${memory.text}
-        </div>
-      `,
-    )
-    .join("");
 }
 
 function renderNetworkStatus() {
