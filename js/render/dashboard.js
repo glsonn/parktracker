@@ -46,14 +46,14 @@ export function renderMemoryMoments(state, DOM) {
     .join("");
 }
 
-export function renderMomentumMessage(state, DOM) {
+export function renderMomentumMessage(state, DOM, nextAchievement) {
   if (state.visits.length === 0) {
     DOM.momentumMessage.textContent = "Your park journey is just beginning.";
 
     return;
   }
 
-  const momentum = getMomentumMessage(state.visits);
+  const momentum = getMomentumMessage(state.visits, nextAchievement);
 
   DOM.momentumMessage.textContent = momentum;
 }

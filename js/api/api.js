@@ -2,6 +2,19 @@ const SUPABASE_URL = window.ENV?.SUPABASE_URL;
 const SUPABASE_ANON_KEY = window.ENV?.SUPABASE_ANON_KEY;
 
 // ======================
+// RESET USER DATA (FOR LOCALHOST TESTING)
+// ======================
+export async function deleteAllVisitsForUser(userId) {
+  return await safeFetch(
+    `${SUPABASE_URL}/rest/v1/visits?user_id=eq.${userId}`,
+    {
+      method: "DELETE",
+      headers: getHeaders(),
+    },
+  );
+}
+
+// ======================
 // GENERIC FETCH HELPER
 // ======================
 async function safeFetch(endpoint, options = {}) {
@@ -173,5 +186,20 @@ export async function deleteVisitById(visitId) {
   return await safeFetch(`${SUPABASE_URL}/rest/v1/visits?id=eq.${visitId}`, {
     method: "DELETE",
     headers: getHeaders(),
+  });
+}
+
+// ======================
+// SAVE USER ACHIEVEMENT
+// ======================
+export async function saveUserAchievement(userId, achievementId, unlockedAt) {
+  return await safeFetch(`${SUPABASE_URL}/rest/v1/user_achievements`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({
+      user_id: userId,
+      achievement_id: achievementId,
+      unlocked_at: unlockedAt,
+    }),
   });
 }

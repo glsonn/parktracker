@@ -289,7 +289,7 @@ export function getOnThisDayMemories(visits, parks) {
   return memories.slice(0, 2);
 }
 
-export function getMomentumMessage(visits) {
+export function getMomentumMessage(visits, nextAchievement) {
   // ======================
   // THIS MONTH
   // ======================
@@ -313,11 +313,9 @@ export function getMomentumMessage(visits) {
   // ======================
   // NEXT MILESTONE
   // ======================
-  const next = getNextAchievement();
-
-  if (next) {
-    const uniqueVisited = getUniqueParkCount();
-    const halfway = Math.floor(next.threshold / 2);
+  if (nextAchievement) {
+    const uniqueVisited = new Set(visits.map((v) => v.park_id)).size;
+    const halfway = Math.floor(nextAchievement.threshold / 2);
 
     if (uniqueVisited >= halfway) {
       return "You’re making steady progress toward your next milestone.";

@@ -14,6 +14,8 @@ import {
   saveVisit,
   updateVisit,
   deleteVisitById,
+  deleteAllVisitsForUser,
+  saveUserAchievement,
 } from "./api/api.js";
 
 import {
@@ -32,6 +34,19 @@ import {
   renderMomentumMessage,
   renderRecentVisits,
 } from "./render/dashboard.js";
+
+import {
+  getUniqueParkCount,
+  getNextAchievement,
+  getProgressMessage,
+  getNewlyUnlockedAchievements,
+} from "./features/achievements.js";
+
+import {
+  renderAchievements,
+  renderNextAchievement,
+  updateTotalProgress,
+} from "./render/achievements.js";
 /* eslint-env browser */
 
 // ======================
@@ -113,13 +128,7 @@ async function resetApp() {
     console.log("Resetting user:", userId);
 
     // 1. Delete ALL visits for this user (REST API version)
-    const result = await safeFetch(
-      `${SUPABASE_URL}/rest/v1/visits?user_id=eq.${userId}`,
-      {
-        method: "DELETE",
-        headers: getHeaders(),
-      },
-    );
+    const result = await deleteAllVisitsForUser(userId);
 
     if (!result) {
       console.error("Failed to delete visits");
@@ -143,21 +152,10 @@ async function resetApp() {
 async function unlockAchievement(achievement) {
   const unlockedAt = new Date().toISOString();
 
-  const { error } = await safeFetch(
-    `${SUPABASE_URL}/rest/v1/user_achievements`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({
-        user_id: USER_ID,
-        achievement_id: achievement.id,
-        unlocked_at: unlockedAt,
-      }),
-    },
+  const { error } = await saveUserAchievement(
+    USER_ID,
+    achievement.id,
+    unlockedAt,
   );
 
   if (error) {
@@ -180,33 +178,26 @@ async function unlockAchievement(achievement) {
   showAchievementToast(achievement);
 
   // re-render and highlight the new one
-  renderAchievements(achievement.id);
+  renderAchievements(state, DOM, achievement.id);
 }
 
 async function checkAchievements() {
-  const visitCount = getUniqueParkCount();
-  const unlockedIds = new Set(
-    state.userAchievements.map((a) => a.achievement_id),
+  const newlyUnlocked = getNewlyUnlockedAchievements(
+    state.visits,
+    state.achievements,
+    state.userAchievements,
   );
 
-  let unlockedSomething = false;
-
-  for (const achievement of state.achievements) {
-    const qualifies = visitCount >= Number(achievement.threshold);
-    const alreadyUnlocked = unlockedIds.has(achievement.id);
-
-    if (qualifies && !alreadyUnlocked) {
-      await unlockAchievement(achievement);
-      unlockedSomething = true;
-    }
+  if (newlyUnlocked.length === 0) {
+    renderAchievements(state, DOM);
+    return false;
   }
 
-  // only re-render if NOTHING unlocked
-  if (!unlockedSomething) {
-    renderAchievements();
+  for (const achievement of newlyUnlocked) {
+    await unlockAchievement(achievement);
   }
 
-  return unlockedSomething;
+  return true;
 }
 
 // ======================
@@ -215,42 +206,6 @@ async function checkAchievements() {
 
 function setLoading(element, message) {
   element.innerHTML = `<p class="loading">${message}</p>`;
-}
-
-function getUniqueParkCount() {
-  return new Set(state.visits.map((v) => v.park_id)).size;
-}
-
-function getNextAchievement() {
-  return (
-    state.achievements
-      .filter(
-        (a) => !state.userAchievements.some((ua) => ua.achievement_id === a.id),
-      )
-      .sort((a, b) => a.threshold - b.threshold)[0] || null
-  );
-}
-
-function getProgressMessage(visitCount, nextAchievement) {
-  if (!nextAchievement) {
-    return "You've visited every park. That's no small thing.";
-  }
-
-  const remaining = nextAchievement.threshold - visitCount;
-
-  if (visitCount === 0) {
-    return "Every journey starts with the first park.";
-  }
-
-  if (remaining === 1) {
-    return "Just one more park to reach your next milestone.";
-  }
-
-  if (remaining <= 3) {
-    return `You're ${remaining} parks away from your next achievement.`;
-  }
-
-  return "You're building something here. Keep going.";
 }
 
 let toastTimeout;
@@ -367,15 +322,20 @@ function clearGlobalError() {
 function renderApp() {
   const visitedSet = getVisitedParkIds();
 
+  const nextAchievement = getNextAchievement(
+    state.achievements,
+    state.userAchievements,
+  );
+
   renderGlobalError();
   renderNetworkStatus();
   renderVisitCounter(visitedSet.size);
-  renderNextAchievement(visitedSet);
-  renderAchievements(null, visitedSet);
-  updateTotalProgress(visitedSet);
+  renderNextAchievement(state, DOM, visitedSet);
+  renderAchievements(state, DOM, null, visitedSet);
+  updateTotalProgress(state, DOM, visitedSet);
 
   if (state.currentView === "dashboard") {
-    renderMomentumMessage(state, DOM);
+    renderMomentumMessage(state, DOM, nextAchievement);
     renderMemoryMoments(state, DOM);
     renderReflection(state, DOM);
     renderRecentVisits(
@@ -621,153 +581,6 @@ function showDetailView() {
   DOM.momentumSection.style.display = "none";
 
   renderApp();
-}
-
-function renderAchievements(newlyUnlockedId = null, visitedSet) {
-  visitedSet = visitedSet || getVisitedParkIds();
-  DOM.achievementsList.innerHTML = "";
-
-  const visitCount = visitedSet.size;
-
-  const unlocked = [];
-  const locked = [];
-
-  for (const achievement of state.achievements) {
-    const isUnlocked = state.userAchievements.some(
-      (ua) => ua.achievement_id === achievement.id,
-    );
-
-    if (isUnlocked) {
-      unlocked.push(achievement);
-    } else {
-      locked.push(achievement);
-    }
-  }
-
-  // ======================
-  // EMPTY STATE (no unlocked yet)
-  // ======================
-  if (unlocked.length === 0) {
-    DOM.achievementsList.innerHTML = `
-      <div class="empty-state">
-        <p>No achievements unlocked yet.</p>
-        <p>Keep exploring to earn your first one 🏆</p>
-      </div>
-    `;
-  }
-
-  // ======================
-  // UNLOCKED SECTION
-  // ======================
-  if (unlocked.length > 0) {
-    const unlockedSection = document.createElement("div");
-    unlockedSection.className = "achievement-section";
-
-    const title = document.createElement("h3");
-    title.textContent = "Unlocked";
-    unlockedSection.appendChild(title);
-
-    unlocked.forEach((achievement) => {
-      const div = document.createElement("div");
-      div.className = "achievement-item unlocked";
-      div.textContent = `🏆 ${achievement.title}`;
-
-      if (newlyUnlockedId && achievement.id === newlyUnlockedId) {
-        div.classList.add("achievement-new");
-      }
-
-      unlockedSection.appendChild(div);
-    });
-
-    DOM.achievementsList.appendChild(unlockedSection);
-  }
-
-  // ======================
-  // LOCKED SECTION
-  // ======================
-  if (locked.length > 0) {
-    const lockedSection = document.createElement("div");
-    lockedSection.className = "achievement-section";
-
-    const title = document.createElement("h3");
-    title.textContent = "Coming Up";
-    lockedSection.appendChild(title);
-
-    locked.forEach((achievement) => {
-      const div = document.createElement("div");
-      div.className = "achievement-item locked";
-
-      div.innerHTML = `
-        <div>🔒 ${achievement.title}</div>
-        <div class="achievement-progress">
-          ${visitCount} / ${achievement.threshold}
-        </div>
-      `;
-
-      lockedSection.appendChild(div);
-    });
-
-    DOM.achievementsList.appendChild(lockedSection);
-  }
-}
-
-function renderNextAchievement(visitedSet) {
-  visitedSet = visitedSet || getVisitedParkIds();
-
-  const visitCount = visitedSet.size;
-  const next = getNextAchievement();
-
-  // all achievements unlocked
-  if (!next) {
-    DOM.nextAchievementTitle.textContent =
-      "You’ve unlocked every achievement 🎉";
-
-    DOM.nextAchievementDescription.textContent = ""; // 👈 add this
-
-    DOM.progressBar.style.width = "100%";
-    DOM.progressBar.style.backgroundColor = "#16a34a";
-
-    DOM.progressText.textContent = "That’s some serious exploring!";
-
-    return;
-  }
-
-  DOM.nextAchievementTitle.textContent = next.title;
-  DOM.nextAchievementDescription.textContent = next.description;
-
-  // calculate percent
-  const percent = Math.min((visitCount / next.threshold) * 100, 100);
-
-  // COLOR LOGIC
-  let color = "#dc2626"; // red
-
-  if (percent >= 75) {
-    color = "#16a34a"; // green
-  } else if (percent >= 40) {
-    color = "#eab308"; // yellow
-  }
-
-  // apply width + color
-  DOM.progressBar.style.width = percent + "%";
-  DOM.progressBar.style.backgroundColor = color;
-
-  // progress text
-  DOM.progressText.textContent = `${visitCount} of ${next.threshold} parks visited`;
-
-  DOM.progressMessage.textContent = getProgressMessage(visitCount, next);
-}
-
-function updateTotalProgress(visitedSet) {
-  visitedSet = visitedSet || getVisitedParkIds();
-  const totalParks = state.parks.length;
-
-  if (totalParks === 0) return;
-
-  const visitedCount = visitedSet.size;
-  const percent = Math.round((visitedCount / totalParks) * 100);
-
-  DOM.totalProgressBar.style.width = percent + "%";
-  DOM.totalProgressText.textContent = `${visitedCount} of ${totalParks} parks visited (${percent}%)`;
 }
 
 function renderNetworkStatus() {
