@@ -61,14 +61,10 @@ export function renderMomentumMessage(state, DOM, nextAchievement) {
 export function renderRecentVisits(
   state,
   DOM,
-  visitedSet,
   showParkDetail,
-  getVisitedParkIds,
   sortVisitsByDate,
   formatDate,
 ) {
-  visitedSet = visitedSet || getVisitedParkIds();
-
   const visits = sortVisitsByDate(state.visits);
 
   DOM.recentVisits.innerHTML = "";

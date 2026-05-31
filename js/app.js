@@ -47,6 +47,12 @@ import {
   renderNextAchievement,
   updateTotalProgress,
 } from "./render/achievements.js";
+
+import {
+  getVisitedParkIds,
+  getVisitStats,
+  getLastVisitMessage,
+} from "./features/visits.js";
 /* eslint-env browser */
 
 // ======================
@@ -231,70 +237,6 @@ function isParkVisited(parkId) {
   return state.visits.some((v) => v.park_id === parkId);
 }
 
-function getVisitedParkIds() {
-  return new Set(state.visits.map((v) => v.park_id));
-}
-
-function getVisitStats(parkId) {
-  const parkVisits = state.visits.filter((visit) => visit.park_id === parkId);
-
-  const visitCount = parkVisits.length;
-
-  if (visitCount === 0) {
-    return {
-      visitCount: 0,
-      lastVisited: null,
-    };
-  }
-
-  const sortedVisits = [...parkVisits].sort(
-    (a, b) => new Date(b.visit_date) - new Date(a.visit_date),
-  );
-
-  return {
-    visitCount,
-    lastVisited: sortedVisits[0].visit_date,
-  };
-}
-
-function getLastVisitMessage(parkId) {
-  const stats = getVisitStats(parkId);
-
-  if (!stats.lastVisited) {
-    return null;
-  }
-
-  const days = getDaysSince(stats.lastVisited);
-
-  // very recent
-  if (days <= 7) {
-    return "You visited this park recently.";
-  }
-
-  // weeks
-  if (days < 30) {
-    return `You last visited this park ${days} days ago.`;
-  }
-
-  // months
-  if (days < 365) {
-    const months = Math.floor(days / 30);
-
-    return `You last visited this park ${months} month${
-      months === 1 ? "" : "s"
-    } ago.`;
-  }
-
-  // years
-  const years = Math.floor(days / 365);
-
-  if (years === 1) {
-    return "It’s been over a year since your last visit here.";
-  }
-
-  return `It’s been over ${years} years since your last visit here.`;
-}
-
 function setGlobalError(message, retry = null) {
   setState({
     errors: {
@@ -320,7 +262,7 @@ function clearGlobalError() {
 // RENDER FUNCTIONS
 // ======================
 function renderApp() {
-  const visitedSet = getVisitedParkIds();
+  const visitedSet = getVisitedParkIds(state.visits);
 
   const nextAchievement = getNextAchievement(
     state.achievements,
@@ -341,9 +283,7 @@ function renderApp() {
     renderRecentVisits(
       state,
       DOM,
-      visitedSet,
       showParkDetail,
-      getVisitedParkIds,
       sortVisitsByDate,
       formatDate,
     );
@@ -400,7 +340,7 @@ function renderParkList(parks, visitedSet) {
     // VISIT META
     // ======================
     if (visited) {
-      const stats = getVisitStats(park.id);
+      const stats = getVisitStats(state.visits, park.id);
 
       const meta = document.createElement("div");
       meta.className = "park-visit-meta";
@@ -464,7 +404,7 @@ function renderParkDetail(park) {
   );
 
   const visitCount = visitsForPark.length;
-  const lastVisitMessage = getLastVisitMessage(park.id);
+  const lastVisitMessage = getLastVisitMessage(state.visits, park.id);
 
   // ✅ THEN render everything in one pass
   if (visitCount === 0) {
